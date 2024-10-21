@@ -10,8 +10,8 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 
 # Load trailer data if a file is uploaded
 if uploaded_file:
-    # Load the data and specify that the column names are in the third row (index 2 in Python)
-    trailer_data = pd.read_excel(uploaded_file, header=2)
+    # Read the "Review Miles sheet" sheet and skip the first two rows to use the third row as the header
+    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=2)
 else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
@@ -60,7 +60,7 @@ else:
     st.warning("No data available for the selected filters.")
 
 # Add an option to download filtered data as CSV
-@st.cache_data
+@st.cache
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
