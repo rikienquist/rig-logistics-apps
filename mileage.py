@@ -11,29 +11,31 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 
 # Load trailer data if a file is uploaded
 if uploaded_file:
-    # Read the "Review Miles sheet" sheet and skip the first two rows to use the third row as the header
-    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=2)
+    # Read in the Excel file and ensure the correct sheet is used
+    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=2)  # Starting at row 3 (0-indexed means header=2)
 else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
 
-# Filter date columns to only include ones with month names
+# Helper function to filter columns that contain month names
 def filter_date_columns(columns):
-    # Regex to check for any month name in the column headers
-    return [col for col in columns if re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', col, re.IGNORECASE)]
+    month_pattern = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', re.IGNORECASE)
+    return [col for col in columns if month_pattern.search(col)]
 
-date_columns = filter_date_columns(trailer_data.columns)
+# Filter the date columns
+date_columns = st.multiselect("Select Date Columns", filter_date_columns(trailer_data.columns))
 
-# Filter terminal options to only show specified terminals
-terminal = st.selectbox("Select Terminal", ['Calgary', 'Edmonton', 'Toronto', 'Winnipeg'])
+# Restrict terminal options to Calgary, Edmonton, Toronto, and Winnipeg
+valid_terminals = ['Calgary', 'Edmonton', 'Toronto', 'Winnipeg']
+terminal = st.selectbox("Select Terminal", valid_terminals)
 
-# Filter wide options to only show Canada and USA
+# Restrict wide options to Canada and USA
 wide = st.selectbox("Select Wide (Geographic Region)", ['Canada', 'USA'])
 
-# Filter by type
+# Restrict type options based on unique types in the dataset
 type_filter = st.selectbox("Select Type", trailer_data['Type'].unique())
 
-# Filter by planner name
+# Restrict planner name options based on unique planner names in the dataset
 planner_name = st.selectbox("Select Planner Name", trailer_data['Planner Name'].unique())
 
 # Filter data based on selections
@@ -48,34 +50,40 @@ filtered_data = trailer_data[
 if date_columns:
     filtered_data = filtered_data[date_columns + ['Terminal', 'Type', 'Wide', 'Planner Name', 'Route', 'UNIT NUMBER']]
 
-# Define function to create a stacked bar chart with drill-downs
-def create_drill_down_chart(data):
+# Define function to create a stacked bar chart with drill-down
+def create_target_percentage_chart(data):
     fig = px.bar(
         data_frame=data,
-        x="Terminal",
-        y="Sept 1-30",  # Change based on your target data column
-        color="Type",
-        hover_data=["Route", "UNIT NUMBER"],  # To show routes and unit numbers
-        title="Target Percentage by Terminal",
-        barmode="stack"
+        x="Terminal",  # Group by Terminal
+        y="Sept 1-30",  # Replace with the actual column for percentage
+        color="Type",  # Color by Single/Team
+        barmode="stack",  # Stacked bar chart
+        hover_data=["Route", "UNIT NUMBER"],  # Add hover data for Route and Unit Number
+        title="Target Percentage by Terminal"
     )
 
-    fig.update_layout(xaxis_title="Terminal", yaxis_title="Target %")
+    # Update layout for better visualization
+    fig.update_layout(
+        xaxis_title="Terminal",
+        yaxis_title="Target %",
+        hovermode="closest"
+    )
+    
     return fig
 
 # Plot the chart
 if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
     st.write(filtered_data)
-    
-    st.write("### Target Percentage Visualization with Drill-Down")
-    fig = create_drill_down_chart(filtered_data)
+
+    st.write("### Target Percentage Visualization")
+    fig = create_target_percentage_chart(filtered_data)
     st.plotly_chart(fig)
 else:
     st.warning("No data available for the selected filters.")
 
 # Add an option to download filtered data as CSV
-@st.cache
+@st.cache_data
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
