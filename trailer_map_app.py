@@ -19,14 +19,14 @@ def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, sel
     # Filter the trailers based on the selected class
     filtered_data = filter_trailers_by_class(trailer_data, selected_class)
     
-    # Plot terminal points
+    # Plot terminal points - Keep terminal circles always visible
     for _, row in coordinates_data.iterrows():
         terminal_name = row['ORIGPROV 2']
         trailers_leaving = filtered_data[(filtered_data['ORIGPROV 2'] == terminal_name) & (filtered_data['DESTPROV 2'] != terminal_name)]['ORIGPROV 2'].count()
         trailers_arriving = filtered_data[(filtered_data['DESTPROV 2'] == terminal_name) & (filtered_data['ORIGPROV 2'] != terminal_name)]['DESTPROV 2'].count()
         net_difference = trailers_arriving - trailers_leaving
-
-        # Plot the terminal circle
+        
+        # Plot the terminal circle (Visible in both modes)
         fig.add_trace(go.Scattergeo(
             locationmode='USA-states',
             lon=[row['Longitude']],
@@ -34,16 +34,21 @@ def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, sel
             text=f"Terminal: {terminal_name}<br>Total Trailers Leaving: {trailers_leaving}<br>Total Trailers Arriving: {trailers_arriving}<br>Total Net Trailer Difference: {net_difference}",
             marker=dict(size=10, color='blue'),
             name=f'Terminal: {terminal_name}',
-            hoverinfo='text',
+            hoverinfo='text' if mode == 'Terminals Only' else 'skip',  # Show terminal info only in 'Terminals Only' mode
         ))
 
     # Plot routes if "All Routes" is selected
     if mode == 'All Routes':
         unique_routes = filtered_data.groupby(['ORIGPROV 2', 'DESTPROV 2']).size().reset_index(name='Total Trailers')
 
+        # Remove routes where the origin and destination are the same (e.g., AB to AB)
+        unique_routes = unique_routes[unique_routes['ORIGPROV 2'] != unique_routes['DESTPROV 2']]
+
+        # If a specific route is selected, filter the routes
         if selected_routes:
             unique_routes = unique_routes[unique_routes.apply(lambda x: f"{x['ORIGPROV 2']} to {x['DESTPROV 2']}" in selected_routes, axis=1)]
 
+        # Plot each route
         for _, route in unique_routes.iterrows():
             origin = coordinates_data[coordinates_data['ORIGPROV 2'] == route['ORIGPROV 2']].iloc[0]
             destination = coordinates_data[coordinates_data['ORIGPROV 2'] == route['DESTPROV 2']].iloc[0]
@@ -75,7 +80,23 @@ def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, sel
             landcolor="lightgray"
         ),
         height=700,
-        showlegend=False
+        showlegend=False,
+        margin={"r":0,"t":0,"l":0,"b":0},  # Set margins for fullscreen view
+        updatemenus=[dict(
+            type="buttons",
+            direction="left",
+            buttons=[dict(
+                args=["mode", "fullscreen"],
+                label="Full Screen",
+                method="relayout"
+            )],
+            pad={"r": 10, "t": 10},
+            showactive=False,
+            x=1,
+            xanchor="right",
+            y=1.1,
+            yanchor="top"
+        )]  # Fullscreen button
     )
     return fig
 
@@ -89,6 +110,10 @@ if selected_mode == 'All Routes':
     # Allow route selection only if "All Routes" is selected
     filtered_data = filter_trailers_by_class(trailer_data, selected_class)
     unique_routes = filtered_data.groupby(['ORIGPROV 2', 'DESTPROV 2']).size().reset_index(name='Total Trailers')
+    
+    # Remove routes where origin and destination are the same
+    unique_routes = unique_routes[unique_routes['ORIGPROV 2'] != unique_routes['DESTPROV 2']]
+    
     route_options = [f"{row['ORIGPROV 2']} to {row['DESTPROV 2']}" for _, row in unique_routes.iterrows()]
     selected_routes = st.multiselect("Select Specific Routes (Optional)", route_options)
 else:
