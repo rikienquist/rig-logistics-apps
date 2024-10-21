@@ -10,8 +10,8 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 
 # Load trailer data if a file is uploaded
 if uploaded_file:
-    # Read the 'Review Miles sheet'
-    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=2)  # Assuming header starts at the third row (index 2)
+    # Read the 'Review Miles sheet' starting from the correct row
+    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=3)  # Adjust header
 else:
     st.warning("Please upload a Mileage Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
@@ -37,7 +37,7 @@ filtered_data = trailer_data[
 # Filter based on selected date columns
 if not filtered_data.empty:
     # Only include the necessary columns
-    filtered_data = filtered_data[['Terminal', 'Type', 'Wide', 'Planner Name', selected_date_column]]
+    filtered_data = filtered_data[['Terminal', 'Type', 'Wide', 'Planner Name', 'Route', 'UNIT NUMBER', selected_date_column]]
 
     # Calculate the Target % based on the user selection
     def calculate_target_percentage(row):
@@ -60,6 +60,7 @@ if not filtered_data.empty:
             x="Terminal",  # Drill down from terminal
             y="Target %",  # Show calculated target %
             color="Type",  # Color by Type (Single/Team)
+            hover_data=["Route", "UNIT NUMBER"],  # Add drill-down info
             barmode="group",
             title=f"Target Percentage by Terminal ({selected_date_column})"
         )
