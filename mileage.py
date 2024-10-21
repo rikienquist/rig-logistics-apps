@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import re
 
 # Streamlit app
 st.title("Mileage Target Percentages")
@@ -16,11 +17,23 @@ else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
 
-# Select columns to filter
-date_columns = st.multiselect("Select Date Columns", trailer_data.columns)
-terminal = st.selectbox("Select Terminal", trailer_data['Terminal'].unique())
+# Filter date columns to only include ones with month names
+def filter_date_columns(columns):
+    # Regex to check for any month name in the column headers
+    return [col for col in columns if re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', col, re.IGNORECASE)]
+
+date_columns = filter_date_columns(trailer_data.columns)
+
+# Filter terminal options to only show specified terminals
+terminal = st.selectbox("Select Terminal", ['Calgary', 'Edmonton', 'Toronto', 'Winnipeg'])
+
+# Filter wide options to only show Canada and USA
+wide = st.selectbox("Select Wide (Geographic Region)", ['Canada', 'USA'])
+
+# Filter by type
 type_filter = st.selectbox("Select Type", trailer_data['Type'].unique())
-wide = st.selectbox("Select Wide (Geographic Region)", trailer_data['Wide'].unique())
+
+# Filter by planner name
 planner_name = st.selectbox("Select Planner Name", trailer_data['Planner Name'].unique())
 
 # Filter data based on selections
@@ -33,18 +46,20 @@ filtered_data = trailer_data[
 
 # Filter based on selected date columns
 if date_columns:
-    filtered_data = filtered_data[date_columns + ['Terminal', 'Type', 'Wide', 'Planner Name']]
+    filtered_data = filtered_data[date_columns + ['Terminal', 'Type', 'Wide', 'Planner Name', 'Route', 'UNIT NUMBER']]
 
-# Define function to create a bar chart (Target %)
-def create_target_percentage_chart(data):
+# Define function to create a stacked bar chart with drill-downs
+def create_drill_down_chart(data):
     fig = px.bar(
         data_frame=data,
-        x="Terminal",  # Change based on how you want to visualize
-        y="Sept 1-30",  # Example column, adjust as needed
-        color="Type",  # Color by Type (Single/Team)
-        barmode="group",
-        title="Target Percentage by Terminal"
+        x="Terminal",
+        y="Sept 1-30",  # Change based on your target data column
+        color="Type",
+        hover_data=["Route", "UNIT NUMBER"],  # To show routes and unit numbers
+        title="Target Percentage by Terminal",
+        barmode="stack"
     )
+
     fig.update_layout(xaxis_title="Terminal", yaxis_title="Target %")
     return fig
 
@@ -53,8 +68,8 @@ if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
     st.write(filtered_data)
     
-    st.write("### Target Percentage Visualization")
-    fig = create_target_percentage_chart(filtered_data)
+    st.write("### Target Percentage Visualization with Drill-Down")
+    fig = create_drill_down_chart(filtered_data)
     st.plotly_chart(fig)
 else:
     st.warning("No data available for the selected filters.")
