@@ -3,8 +3,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # Load your datasets
-trailer_data = pd.read_excel('Trailer Counts Sept 15-21.xlsx', sheet_name='attachment')
-coordinates_data = pd.read_excel('Coordinates.xlsx', sheet_name='Sheet1')
+trailer_data = pd.read_excel('trailer_count_data/Trailer Counts Sept 15-21.xlsx', sheet_name='attachment')
+coordinates_data = pd.read_excel('trailer_count_data/Coordinates.xlsx', sheet_name='Sheet1')
 
 # Filter the trailers based on the selected class
 def filter_trailers_by_class(trailer_data, selected_class):
