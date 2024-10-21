@@ -11,13 +11,16 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     # Read the 'Review Miles sheet' starting from the correct row
-    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=3)  # Adjust header
+    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', header=2)  # Adjust header to third row
 else:
     st.warning("Please upload a Mileage Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
 
+# Ensure all column names are stripped of extra spaces
+trailer_data.columns = trailer_data.columns.str.strip()
+
 # Filter only date-related columns (Jan-Dec) and ensure we're only handling string column names
-date_columns = [col for col in trailer_data.columns if isinstance(col, str) and any(month in col.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'])]
+date_columns = [col for col in trailer_data.columns if isinstance(col, str) and any(month in col.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])]
 
 # Streamlit filters for user to select
 selected_date_column = st.selectbox("Select Date Columns", date_columns)
