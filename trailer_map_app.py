@@ -4,8 +4,8 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 
-trailer_data = pd.read_excel('data/Trailer Counts Sept 15-21.xlsx', sheet_name='attachment')
-coordinates_data = pd.read_excel('data/Coordinates.xlsx', sheet_name='Sheet1')
+trailer_data = pd.read_excel('Trailer Counts Sept 15-21.xlsx', sheet_name='attachment')
+coordinates_data = pd.read_excel('Coordinates.xlsx', sheet_name='Sheet1')
 
 # Filter the trailers based on the selected class
 def filter_trailers_by_class(trailer_data, selected_class):
