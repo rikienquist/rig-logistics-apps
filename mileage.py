@@ -16,8 +16,8 @@ else:
     st.warning("Please upload a Mileage Data Excel file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
 
-# Filter only date-related columns (Jan-Dec)
-date_columns = [col for col in trailer_data.columns if any(month in col.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])]
+# Filter only date-related columns (Jan-Dec) and ensure we're only handling string column names
+date_columns = [col for col in trailer_data.columns if isinstance(col, str) and any(month in col.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'])]
 
 # Streamlit filters for user to select
 selected_date_column = st.selectbox("Select Date Columns", date_columns)
