@@ -19,8 +19,8 @@ else:
 # Ensure all column names are stripped of extra spaces
 trailer_data.columns = trailer_data.columns.str.strip()
 
-# Select only the columns you specified: AH (AUG 1-31) and AJ (Sept 1-30.)
-date_columns = ['AUG 1-31', 'Sept 1-30']
+# Manually specify only the allowed date columns (AH for AUG 1-31, AJ for Sept 1-30)
+date_columns = ['AUG 1-31', 'Sept 1-30.']
 
 # Streamlit filters for user to select the date column, terminal, wide, etc.
 selected_date_column = st.selectbox("Select Date Columns", date_columns)
