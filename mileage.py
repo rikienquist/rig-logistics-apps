@@ -118,4 +118,13 @@ if not filtered_data.empty:
         unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
         st.write("Unit Numbers Breakdown", unit_data)
 else:
-    st.warning("No data available for the selected filters.
+    st.warning("No data available for the selected filters.")
+
+# Add an option to download filtered data as CSV
+@st.cache
+def convert_df(df):
+    return df.to_csv(index=False).encode('utf-8')
+
+if not filtered_data.empty:
+    csv = convert_df(filtered_data)
+    st.download_button(label="Download Filtered Data as CSV", data=csv, file_name='filtered_trailer_data.csv', mime='text/csv')
