@@ -12,19 +12,14 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=2)
+    # Filter out rows where 'UNIT NUMBER' is NaN or missing
+    trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
 else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()
 
 # Filter the relevant date columns
 date_columns = ['AUG 1-31', 'Sept 1-30.']
-
-# Remove any rows with NaN values in important columns
-trailer_data.dropna(subset=['Terminal', 'Type', 'Wide', 'Planner Name'], inplace=True)
-
-# Remove duplicates (like duplicate Winnipeg) and unwanted values (like "Texas")
-trailer_data = trailer_data[trailer_data['Terminal'] != 'Texas']
-trailer_data['Terminal'] = trailer_data['Terminal'].replace('Winnipeg', 'Winnipeg').drop_duplicates()
 
 # Function to create the Target % based on the provided logic
 def calculate_target_percentage(row, date_column):
@@ -39,18 +34,23 @@ def calculate_target_percentage(row, date_column):
 selected_date_column = st.selectbox("Select Date Column", date_columns)
 trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_percentage(row, selected_date_column), axis=1)
 
-# Create filters with "All" option and multiple selection enabled
-terminals = ['All'] + sorted(trailer_data['Terminal'].unique())
-terminal = st.multiselect("Select Terminal", [t for t in terminals if pd.notna(t)], default='All')
+# Filter out "NaN" or invalid values in the filters
+trailer_data = trailer_data.dropna(subset=['Terminal', 'Type', 'Wide', 'Planner Name'])
+
+# Create filters with "All" option and multiple selection enabled, and remove unnecessary options
+terminals = ['All'] + trailer_data['Terminal'].unique().tolist()
+terminals = [t for t in terminals if t != 'Texas']  # Remove 'Texas'
+terminals = list(dict.fromkeys(terminals))  # Remove duplicates like extra "Winnipeg"
+terminal = st.multiselect("Select Terminal", terminals, default='All')
 
 types = ['All'] + trailer_data['Type'].unique().tolist()
-type_filter = st.multiselect("Select Type", [t for t in types if pd.notna(t)], default='All')
+type_filter = st.multiselect("Select Type", types, default='All')
 
 wides = ['All'] + trailer_data['Wide'].unique().tolist()
-wide = st.multiselect("Select Wide (Geographic Region)", [w for w in wides if pd.notna(w) and w != "Texas"], default='All')
+wide = st.multiselect("Select Wide (Geographic Region)", wides, default='All')
 
 planner_names = ['All'] + trailer_data['Planner Name'].unique().tolist()
-planner_name = st.multiselect("Select Planner Name", [p for p in planner_names if pd.notna(p)], default='All')
+planner_name = st.multiselect("Select Planner Name", planner_names, default='All')
 
 # Filter data based on selections
 filtered_data = trailer_data.copy()
@@ -67,30 +67,26 @@ if 'All' not in planner_name:
 avg_target_percentage = filtered_data['Target %'].mean()
 unit_count = filtered_data['UNIT NUMBER'].nunique()
 
-# Define function to create a stacked bar chart (Target %)
-def create_target_percentage_chart(data):
-    avg_target_per_terminal = data.groupby(['Terminal', 'Type'])['Target %'].mean().reset_index()
-    unit_count_per_terminal = data.groupby(['Terminal', 'Type'])['UNIT NUMBER'].nunique().reset_index()
-    merged_data = pd.merge(avg_target_per_terminal, unit_count_per_terminal, on=['Terminal', 'Type'])
+# Define function to create a stacked bar chart when both Single and Team are selected
+def create_stacked_bar_chart(data):
+    avg_target_per_terminal_type = data.groupby(['Terminal', 'Type'])['Target %'].mean().reset_index()
+    unit_count_per_terminal_type = data.groupby(['Terminal', 'Type'])['UNIT NUMBER'].nunique().reset_index()
+    merged_data = pd.merge(avg_target_per_terminal_type, unit_count_per_terminal_type, on=['Terminal', 'Type'])
 
-    # Create the stacked bar chart
-    fig = go.Figure()
-    for type_value in merged_data['Type'].unique():
-        filtered_type_data = merged_data[merged_data['Type'] == type_value]
-        fig.add_trace(go.Bar(
-            x=filtered_type_data['Terminal'],
-            y=filtered_type_data['Target %'],
-            text=[f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}" for i, row in filtered_type_data.iterrows()],
-            textposition='auto',
-            name=type_value,
-            hoverinfo='text'
-        ))
+    fig = px.bar(
+        merged_data,
+        x='Terminal',
+        y='Target %',
+        color='Type',
+        text=merged_data.apply(lambda row: f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}", axis=1),
+        barmode='stack',
+        title="Target Percentage by Terminal"
+    )
 
     fig.update_layout(
-        title="Target Percentage by Terminal",
         xaxis_title="Terminal",
         yaxis_title="Avg Target %",
-        barmode='stack'
+        showlegend=True
     )
     return fig
 
@@ -99,9 +95,9 @@ if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
     st.write(filtered_data)
 
-    # Display target percentage visualization
+    # Display target percentage visualization (stacked if both types are selected)
     st.write("### Target Percentage Visualization")
-    fig = create_target_percentage_chart(filtered_data)
+    fig = create_stacked_bar_chart(filtered_data)
     st.plotly_chart(fig)
 
     # Drill down to routes and unit numbers
