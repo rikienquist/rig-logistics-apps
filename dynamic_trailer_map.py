@@ -18,18 +18,18 @@ else:
     st.warning("Please upload a Trailer Count Excel file to visualize the data. Make sure the sheet name is called 'attachment'.")
     st.stop()  # Stop the script until a file is uploaded
 
-# Filter the trailers based on the selected class
-def filter_trailers_by_class(trailer_data, selected_class):
-    if selected_class == 'ALL':
+# Filter the trailers based on the selected classes
+def filter_trailers_by_class(trailer_data, selected_classes):
+    if 'ALL' in selected_classes:
         return trailer_data
-    return trailer_data[trailer_data['CLASS'] == selected_class]
+    return trailer_data[trailer_data['CLASS'].isin(selected_classes)]
 
 # Define the function to create the map
-def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, selected_routes=None):
+def create_trailer_map(trailer_data, coordinates_data, selected_classes, mode, selected_routes=None):
     fig = go.Figure()
 
-    # Filter the trailers based on the selected class
-    filtered_data = filter_trailers_by_class(trailer_data, selected_class)
+    # Filter the trailers based on the selected classes
+    filtered_data = filter_trailers_by_class(trailer_data, selected_classes)
     
     # Plot terminal points - Keep terminal circles always visible
     for _, row in coordinates_data.iterrows():
@@ -84,7 +84,7 @@ def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, sel
 
     # Ensure map layout and projection stay consistent
     fig.update_layout(
-        title=f"Trailer Movement Map (Filter by CLASS: {selected_class}, Mode: {mode})",
+        title=f"Trailer Movement Map (Filter by CLASS: {', '.join(selected_classes)}, Mode: {mode})",
         geo=dict(
             scope='north america',
             projection_type='natural earth',
@@ -114,11 +114,11 @@ def create_trailer_map(trailer_data, coordinates_data, selected_class, mode, sel
 
 # Streamlit app controls
 selected_mode = st.selectbox("Select Mode", ['Terminals Only', 'All Routes'])
-selected_class = st.selectbox("Select Class", ['ALL', 'DRY VAN', 'SINGLE TEM', 'TRI TEMP'])
+selected_classes = st.multiselect("Select Class", ['ALL', 'DRY VAN', 'SINGLE TEM', 'TRI TEMP'], default='ALL')
 
 if selected_mode == 'All Routes':
     # Allow route selection only if "All Routes" is selected
-    filtered_data = filter_trailers_by_class(trailer_data, selected_class)
+    filtered_data = filter_trailers_by_class(trailer_data, selected_classes)
     unique_routes = filtered_data.groupby(['ORIGPROV 2', 'DESTPROV 2']).size().reset_index(name='Total Trailers')
     
     # Remove routes where origin and destination are the same
@@ -130,5 +130,5 @@ else:
     selected_routes = None
 
 # Create and display the map
-fig = create_trailer_map(trailer_data, coordinates_data, selected_class, selected_mode, selected_routes)
+fig = create_trailer_map(trailer_data, coordinates_data, selected_classes, selected_mode, selected_routes)
 st.plotly_chart(fig)
