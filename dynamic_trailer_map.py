@@ -9,7 +9,7 @@ coordinates_data = pd.read_excel('trailer_count_data/Coordinates.xlsx', sheet_na
 st.title("Trailer Movement Map")
 
 # File uploader for trailer data
-uploaded_trailer_file = st.file_uploader("Upload Trailer Count File", type=['xlsx'])
+uploaded_trailer_file = st.file_uploader("Upload Trailer Count File (make sure the sheet name is 'attachment'", type=['xlsx'])
 
 # Load trailer data if a file is uploaded, otherwise show a message
 if uploaded_trailer_file:
