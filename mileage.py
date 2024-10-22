@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Streamlit app
 st.title("Mileage Target Percentages")
@@ -61,15 +62,28 @@ unit_count = filtered_data['UNIT NUMBER'].nunique()
 
 # Define function to create a bar chart (Target %)
 def create_target_percentage_chart(data):
-    fig = px.bar(
-        data_frame=data,
-        x="Terminal",
-        y="Target %",
-        color="Type",
-        barmode="group",
-        title="Target Percentage by Terminal"
+    avg_target_per_terminal = data.groupby('Terminal')['Target %'].mean().reset_index()
+    unit_count_per_terminal = data.groupby('Terminal')['UNIT NUMBER'].nunique().reset_index()
+    merged_data = pd.merge(avg_target_per_terminal, unit_count_per_terminal, on='Terminal')
+
+    # Create the bar chart with labels showing both Avg Target % and Unit count
+    fig = go.Figure()
+    for i, row in merged_data.iterrows():
+        fig.add_trace(go.Bar(
+            x=[row['Terminal']],
+            y=[row['Target %']],
+            text=f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}",
+            textposition='auto',
+            name=row['Terminal'],
+            hoverinfo='text'
+        ))
+
+    fig.update_layout(
+        title="Target Percentage by Terminal",
+        xaxis_title="Terminal",
+        yaxis_title="Avg Target %",
+        barmode='group'
     )
-    fig.update_layout(xaxis_title="Terminal", yaxis_title="Target %")
     return fig
 
 # Display filtered data
@@ -82,15 +96,18 @@ if not filtered_data.empty:
     fig = create_target_percentage_chart(filtered_data)
     st.plotly_chart(fig)
 
-    # Drill down to routes and unit numbers if needed
+    # Drill down to routes and unit numbers
     st.write("### Drill Down")
     drilldown_level = st.radio("Drill Down to", ['Routes', 'Unit Numbers'])
 
     if drilldown_level == 'Routes':
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
-        st.write("Routes Breakdown", route_data)
+        route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
+        merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
+        st.write("Routes Breakdown", merged_route_data)
     elif drilldown_level == 'Unit Numbers':
-        unit_data = filtered_data.groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
+        selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
+        unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
         st.write("Unit Numbers Breakdown", unit_data)
 else:
     st.warning("No data available for the selected filters.")
