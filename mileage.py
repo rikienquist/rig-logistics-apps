@@ -36,7 +36,10 @@ selected_date_column = st.selectbox("Select Date Column", date_columns)
 trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_percentage(row, selected_date_column), axis=1)
 
 # Remove duplicates in terminals (especially for 'Winnipeg')
-trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # In case of spacing issues
+trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
+
+# Normalize Planner Name to handle case and space differences
+trailer_data['Planner Name'] = trailer_data['Planner Name'].str.strip().str.title()  # Standardize to title case
 
 # Create filters with "All" option and multiple selection enabled
 terminals = ['All'] + sorted(trailer_data['Terminal'].unique())
