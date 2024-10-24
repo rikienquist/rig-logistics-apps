@@ -1,7 +1,6 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 
 # Streamlit app
 st.title("Mileage Target Percentages")
@@ -37,10 +36,15 @@ trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_perce
 # Filter out "NaN" or invalid values in the filters
 trailer_data = trailer_data.dropna(subset=['Terminal', 'Type', 'Wide', 'Planner Name'])
 
-# Create filters with "All" option and multiple selection enabled, and remove unnecessary options
+# Remove unwanted entries like 'Texas' and duplicates in Terminal and Wide columns
+trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Texas': None}).dropna()
+trailer_data['Wide'] = trailer_data['Wide'].replace({'Texas': None}).dropna()
+
+# Remove duplicate entries (like the extra "Winnipeg")
+trailer_data['Terminal'] = trailer_data['Terminal'].replace(['Winnipeg', 'WINNIPEG'], 'Winnipeg')
+
+# Create filters with "All" option and multiple selection enabled
 terminals = ['All'] + trailer_data['Terminal'].unique().tolist()
-terminals = [t for t in terminals if t != 'Texas']  # Remove 'Texas'
-terminals = list(dict.fromkeys(terminals))  # Remove duplicates like extra "Winnipeg"
 terminal = st.multiselect("Select Terminal", terminals, default='All')
 
 types = ['All'] + trailer_data['Type'].unique().tolist()
@@ -108,6 +112,7 @@ if not filtered_data.empty:
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
         merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
+        merged_route_data.rename(columns={'UNIT NUMBER': 'Number of Units'}, inplace=True)  # Rename for clarity
         st.write("Routes Breakdown", merged_route_data)
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
