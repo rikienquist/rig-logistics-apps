@@ -11,8 +11,9 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=2)
-    # Filter out rows where 'UNIT NUMBER' is NaN or missing
+    # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty or 'Wide' is 'Texas'
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
+    trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas')]
 else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()
@@ -33,27 +34,20 @@ def calculate_target_percentage(row, date_column):
 selected_date_column = st.selectbox("Select Date Column", date_columns)
 trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_percentage(row, selected_date_column), axis=1)
 
-# Filter out "NaN" or invalid values in the filters
-trailer_data = trailer_data.dropna(subset=['Terminal', 'Type', 'Wide', 'Planner Name'])
-
-# Remove unwanted entries like 'Texas' and duplicates in Terminal and Wide columns
-trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Texas': None}).dropna()
-trailer_data['Wide'] = trailer_data['Wide'].replace({'Texas': None}).dropna()
-
-# Remove duplicate entries (like the extra "Winnipeg")
-trailer_data['Terminal'] = trailer_data['Terminal'].replace(['Winnipeg', 'WINNIPEG'], 'Winnipeg')
+# Remove duplicates in terminals (especially for 'Winnipeg')
+trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # In case of spacing issues
 
 # Create filters with "All" option and multiple selection enabled
-terminals = ['All'] + trailer_data['Terminal'].unique().tolist()
+terminals = ['All'] + sorted(trailer_data['Terminal'].unique())
 terminal = st.multiselect("Select Terminal", terminals, default='All')
 
-types = ['All'] + trailer_data['Type'].unique().tolist()
+types = ['All'] + sorted(trailer_data['Type'].unique())
 type_filter = st.multiselect("Select Type", types, default='All')
 
-wides = ['All'] + trailer_data['Wide'].unique().tolist()
+wides = ['All'] + sorted(trailer_data['Wide'].unique())
 wide = st.multiselect("Select Wide (Geographic Region)", wides, default='All')
 
-planner_names = ['All'] + trailer_data['Planner Name'].unique().tolist()
+planner_names = ['All'] + sorted(trailer_data['Planner Name'].unique())
 planner_name = st.multiselect("Select Planner Name", planner_names, default='All')
 
 # Filter data based on selections
@@ -112,11 +106,12 @@ if not filtered_data.empty:
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
         merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
-        merged_route_data.rename(columns={'UNIT NUMBER': 'Number of Units'}, inplace=True)  # Rename for clarity
+        merged_route_data.columns = ['Route', 'Target %', 'Number of Units']  # Rename UNIT NUMBER to Number of Units
         st.write("Routes Breakdown", merged_route_data)
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
         unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
+        unit_data.columns = ['Number of Units', 'Target %']  # Rename UNIT NUMBER to Number of Units
         st.write("Unit Numbers Breakdown", unit_data)
 else:
     st.warning("No data available for the selected filters.")
