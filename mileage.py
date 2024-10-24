@@ -91,17 +91,19 @@ def create_stacked_bar_chart(data):
 
 # Define function to create a pie chart for Target Achieved
 def create_pie_chart(data):
+    # Count entries with 'Target achieved'
     target_achieved_count = data[data['Target'] == 'Target achieved'].shape[0]
+    # Total count of entries in the filtered data
     total_count = data.shape[0]
-    target_not_achieved_count = total_count - target_achieved_count
 
+    # Create pie chart showing proportion of "Target achieved" versus "Other"
     fig = go.Figure(
         data=[go.Pie(
-            labels=['Target Achieved', 'Target Not Achieved'],
-            values=[target_achieved_count, target_not_achieved_count],
+            labels=['Target Achieved', 'Other'],
+            values=[target_achieved_count, total_count - target_achieved_count],
             hole=0.4,
             textinfo='label+percent',
-            marker=dict(colors=['green', 'red'])
+            marker=dict(colors=['green', 'gray'])
         )]
     )
     fig.update_layout(title_text="Target Achieved Percentage")
