@@ -65,6 +65,17 @@ if 'All' not in wide:
 if 'All' not in planner_name:
     filtered_data = filtered_data[filtered_data['Planner Name'].isin(planner_name)]
 
+# Calculate Target Achieved for the selected date column based on conditions
+def check_target_achieved(row, date_column):
+    if row['Type'] == 'Single' and row[date_column] >= 12000:
+        return 'Target Achieved'
+    elif row['Type'] == 'Team' and row[date_column] >= 20000:
+        return 'Target Achieved'
+    else:
+        return 'Target Not Achieved'
+
+filtered_data['Target Status'] = filtered_data.apply(lambda row: check_target_achieved(row, selected_date_column), axis=1)
+
 # Calculate average Target % and count units
 avg_target_percentage = filtered_data['Target %'].mean()
 unit_count = filtered_data['UNIT NUMBER'].nunique()
@@ -92,9 +103,9 @@ def create_stacked_bar_chart(data):
     )
     return fig
 
-# Define function to create a pie chart for Target Achieved
+# Define function to create a pie chart for Target Achieved Percentage
 def create_pie_chart(data):
-    target_achieved_count = data[data['Target'] == 'Target achieved'].shape[0]
+    target_achieved_count = data[data['Target Status'] == 'Target Achieved'].shape[0]
     total_count = data.shape[0]
     target_not_achieved_count = total_count - target_achieved_count
 
