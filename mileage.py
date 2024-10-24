@@ -31,33 +31,49 @@ def calculate_target_percentage(row, date_column):
     else:
         return None
 
-# Apply the Target % calculation dynamically based on the selected date column
+# Select Date Column dynamically
 selected_date_column = st.selectbox("Select Date Column", date_columns)
 
-# Dynamically recalculate Target % based on the selected column
-trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_percentage(row, selected_date_column), axis=1)
+# Dynamically reset and recalculate Target % and Target Achieved based on the selected column
+def recalculate_metrics(data, date_column):
+    # Recalculate Target %
+    data['Target %'] = data.apply(lambda row: calculate_target_percentage(row, date_column), axis=1)
+
+    # Recalculate Target Achieved status dynamically based on the selected date column
+    def check_target_achieved(row):
+        if row['Type'] == 'Single' and row[date_column] >= 12000:
+            return 'Target Achieved'
+        elif row['Type'] == 'Team' and row[date_column] >= 20000:
+            return 'Target Achieved'
+        else:
+            return 'Target Not Achieved'
+
+    data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
+    return data
+
+# Ensure calculations refresh when selecting a new column
+filtered_data = recalculate_metrics(trailer_data.copy(), selected_date_column)
 
 # Remove duplicates in terminals (especially for 'Winnipeg')
-trailer_data['Terminal'] = trailer_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
+filtered_data['Terminal'] = filtered_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
 
 # Normalize Planner Name to handle case and space differences
-trailer_data['Planner Name'] = trailer_data['Planner Name'].str.strip().str.title()  # Standardize to title case
+filtered_data['Planner Name'] = filtered_data['Planner Name'].str.strip().str.title()  # Standardize to title case
 
 # Create filters with "All" option and multiple selection enabled
-terminals = ['All'] + sorted(trailer_data['Terminal'].unique())
+terminals = ['All'] + sorted(filtered_data['Terminal'].unique())
 terminal = st.multiselect("Select Terminal", terminals, default='All')
 
-types = ['All'] + sorted(trailer_data['Type'].unique())
+types = ['All'] + sorted(filtered_data['Type'].unique())
 type_filter = st.multiselect("Select Type", types, default='All')
 
-wides = ['All'] + sorted(trailer_data['Wide'].unique())
+wides = ['All'] + sorted(filtered_data['Wide'].unique())
 wide = st.multiselect("Select Wide (Geographic Region)", wides, default='All')
 
-planner_names = ['All'] + sorted(trailer_data['Planner Name'].unique())
+planner_names = ['All'] + sorted(filtered_data['Planner Name'].unique())
 planner_name = st.multiselect("Select Planner Name", planner_names, default='All')
 
 # Filter data based on selections
-filtered_data = trailer_data.copy()
 if 'All' not in terminal:
     filtered_data = filtered_data[filtered_data['Terminal'].isin(terminal)]
 if 'All' not in type_filter:
@@ -66,18 +82,6 @@ if 'All' not in wide:
     filtered_data = filtered_data[filtered_data['Wide'].isin(wide)]
 if 'All' not in planner_name:
     filtered_data = filtered_data[filtered_data['Planner Name'].isin(planner_name)]
-
-# Calculate Target Achieved for the selected date column based on conditions
-def check_target_achieved(row, date_column):
-    if row['Type'] == 'Single' and row[date_column] >= 12000:
-        return 'Target Achieved'
-    elif row['Type'] == 'Team' and row[date_column] >= 20000:
-        return 'Target Achieved'
-    else:
-        return 'Target Not Achieved'
-
-# Recalculate Target Achieved status dynamically based on the selected date column
-filtered_data['Target Status'] = filtered_data.apply(lambda row: check_target_achieved(row, selected_date_column), axis=1)
 
 # Calculate average Target % and count units
 avg_target_percentage = filtered_data['Target %'].mean()
