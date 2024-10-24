@@ -31,8 +31,10 @@ def calculate_target_percentage(row, date_column):
     else:
         return None
 
-# Apply the Target % calculation to the relevant date column selected by the user
+# Apply the Target % calculation dynamically based on the selected date column
 selected_date_column = st.selectbox("Select Date Column", date_columns)
+
+# Dynamically recalculate Target % based on the selected column
 trailer_data['Target %'] = trailer_data.apply(lambda row: calculate_target_percentage(row, selected_date_column), axis=1)
 
 # Remove duplicates in terminals (especially for 'Winnipeg')
@@ -74,6 +76,7 @@ def check_target_achieved(row, date_column):
     else:
         return 'Target Not Achieved'
 
+# Recalculate Target Achieved status dynamically based on the selected date column
 filtered_data['Target Status'] = filtered_data.apply(lambda row: check_target_achieved(row, selected_date_column), axis=1)
 
 # Calculate average Target % and count units
