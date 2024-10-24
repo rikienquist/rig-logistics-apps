@@ -106,12 +106,12 @@ if not filtered_data.empty:
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
         merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
-        merged_route_data.columns = ['Route', 'Target %', 'Number of Units']  # Rename UNIT NUMBER to Number of Units
+        merged_route_data.columns = ['Route', 'Average Target %', 'Number of Units'] 
         st.write("Routes Breakdown", merged_route_data)
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
         unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
-        unit_data.columns = ['Number of Units', 'Target %']  # Rename UNIT NUMBER to Number of Units
+        unit_data.columns = ['Unit Number', 'Target %']  
         st.write("Unit Numbers Breakdown", unit_data)
 else:
     st.warning("No data available for the selected filters.")
