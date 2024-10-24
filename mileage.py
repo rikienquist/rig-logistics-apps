@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Streamlit app
 st.title("Mileage Target Percentages")
@@ -88,6 +89,24 @@ def create_stacked_bar_chart(data):
     )
     return fig
 
+# Define function to create a pie chart for Target Achieved
+def create_pie_chart(data):
+    target_achieved_count = data[data['Target'] == 'Target achieved'].shape[0]
+    total_count = data.shape[0]
+    target_not_achieved_count = total_count - target_achieved_count
+
+    fig = go.Figure(
+        data=[go.Pie(
+            labels=['Target Achieved', 'Target Not Achieved'],
+            values=[target_achieved_count, target_not_achieved_count],
+            hole=0.4,
+            textinfo='label+percent',
+            marker=dict(colors=['green', 'red'])
+        )]
+    )
+    fig.update_layout(title_text="Target Achieved Percentage")
+    return fig
+
 # Display filtered data
 if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
@@ -97,6 +116,11 @@ if not filtered_data.empty:
     st.write("### Target Percentage Visualization")
     fig = create_stacked_bar_chart(filtered_data)
     st.plotly_chart(fig)
+
+    # Display pie chart for Target Achieved
+    st.write("### Target Achieved Percentage")
+    pie_fig = create_pie_chart(filtered_data)
+    st.plotly_chart(pie_fig)
 
     # Drill down to routes and unit numbers
     st.write("### Drill Down")
