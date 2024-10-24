@@ -11,9 +11,9 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=2)
-    # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty or 'Wide' is 'Texas'
+    # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty, or 'Wide' or 'Terminal' is 'Texas'
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
-    trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas')]
+    trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
 else:
     st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()
