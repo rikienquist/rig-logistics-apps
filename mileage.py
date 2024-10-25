@@ -6,8 +6,11 @@ import plotly.graph_objects as go
 # Streamlit app
 st.title("Mileage Target Percentages")
 
-# File uploader for trailer data
+# File uploader for mileage trailer data
 uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
+
+# Optional: File uploader for litres of gas data
+uploaded_gas_file = st.file_uploader("(Optional) Please upload another Excel file with litres of gas for each truck unit for your selected month to include MPG (Make sure the name of the column for truck unit number is 'Unit' and for litres is 'Total Qty').", type=['xlsx'])
 
 # Load trailer data if a file is uploaded
 if uploaded_file:
@@ -16,8 +19,15 @@ if uploaded_file:
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
 else:
-    st.warning("Please upload a Mileage Report Excel file to visualize the data.")
+    st.warning("Please upload a Trailer Data Excel file to visualize the data.")
     st.stop()
+
+# Load gas data if uploaded
+if uploaded_gas_file:
+    gas_data = pd.read_excel(uploaded_gas_file)
+    gas_data['Gallons'] = gas_data['Total Qty'] * 0.264172  # Convert litres to gallons
+else:
+    gas_data = None
 
 # Filter the relevant date columns
 date_columns = ['AUG 1-31', 'Sept 1-30.']
@@ -31,6 +41,15 @@ def calculate_target_percentage(row, date_column):
     else:
         return None
 
+# Function to calculate MPG if gas data is provided
+def calculate_mpg(row, date_column):
+    if gas_data is not None:
+        unit_number = row['UNIT NUMBER']
+        gas_row = gas_data[gas_data['Unit'] == unit_number]
+        if not gas_row.empty and gas_row.iloc[0]['Gallons'] > 0:
+            return row[date_column] / gas_row.iloc[0]['Gallons']  # MPG = miles / gallons
+    return None
+
 # Select Date Column dynamically
 selected_date_column = st.selectbox("Select Date Column", date_columns)
 
@@ -38,6 +57,10 @@ selected_date_column = st.selectbox("Select Date Column", date_columns)
 def recalculate_metrics(data, date_column):
     # Recalculate Target %
     data['Target %'] = data.apply(lambda row: calculate_target_percentage(row, date_column), axis=1)
+
+    # Recalculate MPG if gas data is provided
+    if gas_data is not None:
+        data['MPG'] = data.apply(lambda row: calculate_mpg(row, date_column), axis=1)
 
     # Recalculate Target Achieved status dynamically based on the selected date column
     def check_target_achieved(row):
@@ -49,10 +72,6 @@ def recalculate_metrics(data, date_column):
             return 'Target Not Achieved'
 
     data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
-
-    # Filter out rows where the selected date column has values <= 10
-    data = data[data[date_column] > 10]
-
     return data
 
 # Ensure calculations refresh when selecting a new column
@@ -87,9 +106,11 @@ if 'All' not in wide:
 if 'All' not in planner_name:
     filtered_data = filtered_data[filtered_data['Planner Name'].isin(planner_name)]
 
-# Calculate average Target % and count units
+# Calculate average Target %, MPG, and count units
 avg_target_percentage = filtered_data['Target %'].mean()
 unit_count = filtered_data['UNIT NUMBER'].nunique()
+if gas_data is not None:
+    avg_mpg = filtered_data['MPG'].mean()
 
 # Define function to create a stacked bar chart when both Single and Team are selected
 def create_stacked_bar_chart(data):
@@ -97,12 +118,16 @@ def create_stacked_bar_chart(data):
     unit_count_per_terminal_type = data.groupby(['Terminal', 'Type'])['UNIT NUMBER'].nunique().reset_index()
     merged_data = pd.merge(avg_target_per_terminal_type, unit_count_per_terminal_type, on=['Terminal', 'Type'])
 
+    if gas_data is not None:
+        mpg_per_terminal_type = data.groupby(['Terminal', 'Type'])['MPG'].mean().reset_index()
+        merged_data = pd.merge(merged_data, mpg_per_terminal_type, on=['Terminal', 'Type'])
+
     fig = px.bar(
         merged_data,
         x='Terminal',
         y='Target %',
         color='Type',
-        text=merged_data.apply(lambda row: f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}", axis=1),
+        text=merged_data.apply(lambda row: f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}<br>MPG: {row['MPG']:.2f}" if 'MPG' in merged_data.columns else f"Avg Target: {row['Target %']:.2f}%<br>Units: {row['UNIT NUMBER']}", axis=1),
         barmode='stack',
         title="Target Percentage by Terminal"
     )
@@ -152,24 +177,7 @@ if not filtered_data.empty:
     drilldown_level = st.radio("Drill Down to", ['Routes', 'Unit Numbers'])
 
     if drilldown_level == 'Routes':
-        route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
+        route_data = filtered_data.groupby(['Route'])[['Target %', 'MPG']].mean().reset_index() if gas_data is not None else filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
         merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
-        merged_route_data.columns = ['Route', 'Average Target %', 'Number of Units'] 
-        st.write("Routes Breakdown", merged_route_data)
-    elif drilldown_level == 'Unit Numbers':
-        selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
-        unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
-        unit_data.columns = ['Unit Number', 'Target %']  
-        st.write("Unit Numbers Breakdown", unit_data)
-else:
-    st.warning("No data available for the selected filters.")
-
-# Add an option to download filtered data as CSV
-@st.cache
-def convert_df(df):
-    return df.to_csv(index=False).encode('utf-8')
-
-if not filtered_data.empty:
-    csv = convert_df(filtered_data)
-    st.download_button(label="Download Filtered Data as CSV", data=csv, file_name='filtered_trailer_data.csv', mime='text/csv')
+        merged_route_data.columns = ['Route', 'Average Target %', 'MPG', 'Number of Units'] if gas_data is not None else ['Route', 'Average Target %', 'Number of Units
