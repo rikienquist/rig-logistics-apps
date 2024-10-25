@@ -49,6 +49,10 @@ def recalculate_metrics(data, date_column):
             return 'Target Not Achieved'
 
     data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
+
+    # Filter out rows where the selected date column has values <= 10
+    data = data[data[date_column] > 10]
+
     return data
 
 # Ensure calculations refresh when selecting a new column
