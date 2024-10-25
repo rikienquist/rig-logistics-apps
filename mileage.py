@@ -16,7 +16,7 @@ if uploaded_file:
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
 else:
-    st.warning("Please upload a Trailer Data Excel file to visualize the data.")
+    st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
 
 # Filter the relevant date columns
