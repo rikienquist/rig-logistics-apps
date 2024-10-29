@@ -162,9 +162,12 @@ if not filtered_data.empty:
 
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
-        unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
-        unit_data['Miles'] = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])[selected_date_column].mean().values
-        unit_data.columns = ['Unit Number', 'Target %', 'Miles']  
+        
+        # Filter data for the selected route
+        unit_data = filtered_data[filtered_data['Route'] == selected_route][['UNIT NUMBER', 'Target %', selected_date_column, 'Comments']]
+        
+        # Rename columns for display
+        unit_data.columns = ['Unit Number', 'Target %', 'Number of Miles', 'Comments'] 
         
         st.write("Unit Numbers Breakdown", unit_data)
 else:
