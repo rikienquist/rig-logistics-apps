@@ -148,15 +148,24 @@ if not filtered_data.empty:
     drilldown_level = st.radio("Drill Down to", ['Routes', 'Unit Numbers'])
 
     if drilldown_level == 'Routes':
+        # Calculate average target % and average miles for each route
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
+        route_miles_avg = filtered_data.groupby(['Route'])[selected_date_column].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
-        merged_route_data = pd.merge(route_data, route_unit_count, on='Route')
-        merged_route_data.columns = ['Route', 'Average Target %', 'Number of Units'] 
+
+        # Merge all route-level calculations
+        merged_route_data = pd.merge(route_data, route_miles_avg, on='Route')
+        merged_route_data = pd.merge(merged_route_data, route_unit_count, on='Route')
+        merged_route_data.columns = ['Route', 'Average Target %', 'Average Miles', 'Number of Units'] 
+
         st.write("Routes Breakdown", merged_route_data)
+
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
         unit_data = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])['Target %'].mean().reset_index()
-        unit_data.columns = ['Unit Number', 'Target %']  
+        unit_data['Miles'] = filtered_data[filtered_data['Route'] == selected_route].groupby(['UNIT NUMBER'])[selected_date_column].mean().values
+        unit_data.columns = ['Unit Number', 'Target %', 'Miles']  
+        
         st.write("Unit Numbers Breakdown", unit_data)
 else:
     st.warning("No data available for the selected filters.")
