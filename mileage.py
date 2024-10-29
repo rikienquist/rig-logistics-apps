@@ -148,7 +148,7 @@ if not filtered_data.empty:
     drilldown_level = st.radio("Drill Down to", ['Routes', 'Unit Numbers'])
 
     if drilldown_level == 'Routes':
-        # Calculate average target % and average miles for each route
+        # Calculate average target %, average miles, and number of units for each route
         route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index()
         route_miles_avg = filtered_data.groupby(['Route'])[selected_date_column].mean().reset_index()
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index()
