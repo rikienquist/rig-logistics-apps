@@ -153,11 +153,13 @@ if not filtered_data.empty:
         route_miles_avg = filtered_data.groupby(['Route'])[selected_date_column].mean().reset_index(name="Average Miles")
         route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index(name="Number of Units")
 
-        # Merge all route-level calculations and rearrange columns
-        merged_route_data = pd.merge(route_data, route_miles_avg, on='Route')
-        merged_route_data = pd.merge(merged_route_data, route_unit_count, on='Route')
+        # Merge all route-level calculations
+        merged_route_data = pd.merge(route_miles_avg, route_unit_count, on='Route')
+        merged_route_data = pd.merge(merged_route_data, route_data, on='Route')
 
+        # Display the reordered table with Average Target % at the end
         st.write("Routes Breakdown", merged_route_data)
+
 
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
