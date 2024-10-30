@@ -22,7 +22,7 @@ else:
 def filter_trailers_by_class(trailer_data, selected_classes):
     if 'ALL' in selected_classes:
         return trailer_data
-    return trailer_data[trailer_data['CLASS'].isin(selected_classes)]
+    return trailer_data[trailer_data['CLASS 2'].isin(selected_classes)]
 
 # Define the function to create the map
 def create_trailer_map(trailer_data, coordinates_data, selected_classes, mode, selected_routes=None):
