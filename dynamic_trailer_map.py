@@ -114,7 +114,7 @@ def create_trailer_map(trailer_data, coordinates_data, selected_classes, mode, s
 
 # Streamlit app controls
 selected_mode = st.selectbox("Select Mode", ['Terminals Only', 'All Routes'])
-selected_classes = st.multiselect("Select Class", ['ALL', 'DRY VAN', 'SINGLE TEM', 'TRI TEMP'], default='ALL')
+selected_classes = st.multiselect("Select Class", ['ALL', 'DRY VAN', 'HEATER VAN', 'SINGLE TEM', 'TRI TEMP'], default='ALL')
 
 if selected_mode == 'All Routes':
     # Allow route selection only if "All Routes" is selected
