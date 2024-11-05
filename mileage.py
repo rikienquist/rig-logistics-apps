@@ -20,7 +20,7 @@ else:
     st.stop()
 
 # Filter the relevant date columns
-date_columns = ['AUG 1-31', 'Sept 1-30.']
+date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31']
 
 # Function to create the Target % based on the provided logic
 def calculate_target_percentage(row, date_column):
