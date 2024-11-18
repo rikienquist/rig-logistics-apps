@@ -2,22 +2,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from geopy.distance import geodesic
-import warnings
+import os
 
-warnings.filterwarnings("ignore")
-
-# Load datasets
-@st.cache
-def load_data():
-    tlorder_df = pd.read_csv("trip_map_data/TLORDER_Sep2022-Sep2024_V3.csv", low_memory=False)
-    geocode_df = pd.read_csv("trip_map_data/merged_geocoded.csv", low_memory=False)
-    driver_pay_df = pd.read_csv("trip_map_data/driver_pay_data.csv", low_memory=False)
-    return tlorder_df, geocode_df, driver_pay_df
-
-# Load the data
-tlorder_df, geocode_df, driver_pay_df = load_data()
-
-# Coordinate fixes
+# Dictionary for city-province coordinate corrections
 coordinate_fixes = {
     ("ACHESON", "AB"): {"LAT": 53.5522, "LON": -113.7627},
     ("BALZAC", "AB"): {"LAT": 51.2126, "LON": -114.0076},
@@ -52,7 +39,13 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
-# Correct coordinates
+# Load data from GitHub repository folder
+data_folder = "trip_map_data"
+tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), low_memory=False)
+geocode_df = pd.read_csv(os.path.join(data_folder, "merged_geocoded.csv"), low_memory=False)
+driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), low_memory=False)
+
+# Function to apply coordinate corrections
 def correct_coordinates(row):
     orig_key = (row['ORIGCITY'], row['ORIGPROV'])
     dest_key = (row['DESTCITY'], row['DESTPROV'])
@@ -62,7 +55,7 @@ def correct_coordinates(row):
         row['DEST_LAT'], row['DEST_LON'] = coordinate_fixes[dest_key].values()
     return row
 
-# Preprocess data
+# Merge geocodes
 tlorder_df = tlorder_df.merge(
     geocode_df[['ORIGCITY', 'ORIG_LAT', 'ORIG_LON']].drop_duplicates(),
     on='ORIGCITY', how='left'
@@ -71,10 +64,14 @@ tlorder_df = tlorder_df.merge(
     on='DESTCITY', how='left'
 ).apply(correct_coordinates, axis=1)
 
+# Filter for non-same-city routes
 tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']]
+
+# Merge with driver pay
 driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
+# Calculate CAD charge and filter
 tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
     lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
     axis=1
@@ -82,10 +79,11 @@ tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
 filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
 filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
 
+# Calculate Revenue per Mile and Profit Margin
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
 filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
 
-# Geopy distances
+# Calculate Geopy Distance
 filtered_df['route_key'] = filtered_df[['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON']].apply(tuple, axis=1)
 unique_routes = filtered_df.drop_duplicates(subset='route_key')
 unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
@@ -93,61 +91,41 @@ unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
 )
 filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
-# Streamlit app
-st.title("Trip Map Visualization")
+# Streamlit App
+st.title("Trip Map Viewer")
 
-punit_options = sorted(filtered_df['PICK_UP_PUNIT'].unique())
-punit = st.selectbox("Select PUNIT", options=["All"] + punit_options)
+# PUNIT and Driver ID selection
+selected_punit = st.selectbox("Select PUNIT:", options=sorted(filtered_df['PICK_UP_PUNIT'].unique()))
+selected_driver = st.selectbox("Select Driver ID (optional):", options=["All"] + sorted(filtered_df['DRIVER_ID'].dropna().unique().astype(str)))
 
-if punit != "All":
-    data = filtered_df[filtered_df['PICK_UP_PUNIT'] == punit]
-else:
-    data = filtered_df
+# Filter based on selections
+filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
+if selected_driver != "All":
+    filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver]
 
-driver_options = sorted(data['DRIVER_ID'].unique())
-driver = st.selectbox("Select Driver ID (Optional)", options=["All"] + driver_options)
+# Day navigation
+days = sorted(filtered_view['PICK_UP_BY'].unique())
+day_index = st.number_input("Day Index", 0, len(days) - 1, 0)
 
-if driver != "All":
-    data = data[data['DRIVER_ID'] == driver]
+if len(days) > 0:
+    selected_day = days[day_index]
+    st.write(f"Viewing data for day: {selected_day}")
+    day_data = filtered_view[filtered_view['PICK_UP_BY'] == selected_day]
 
-data = data.sort_values(by='PICK_UP_BY')
-daily_routes = list(data.groupby(data['PICK_UP_BY']))
-day_index = st.session_state.get("day_index", 0)
+    # Generate map
+    fig = go.Figure()
+    for _, row in day_data.iterrows():
+        fig.add_trace(go.Scattergeo(
+            lon=[row['ORIG_LON'], row['DEST_LON']],
+            lat=[row['ORIG_LAT'], row['DEST_LAT']],
+            mode="markers+lines",
+            marker=dict(size=8),
+            line=dict(width=2, color="blue"),
+            text=f"{row['ORIGCITY']} to {row['DESTCITY']}: ${row['TOTAL_CHARGE_CAD']:.2f}",
+        ))
 
-total_days = len(daily_routes)
-st.write(f"Day {day_index + 1} of {total_days}")
+    fig.update_layout(title="Routes Map", geo=dict(scope="north america", projection_type="mercator"))
+    st.plotly_chart(fig)
 
-if st.button("Previous Day") and day_index > 0:
-    day_index -= 1
-    st.session_state["day_index"] = day_index
-
-if st.button("Next Day") and day_index < total_days - 1:
-    day_index += 1
-    st.session_state["day_index"] = day_index
-
-day, day_data = daily_routes[day_index]
-
-fig = go.Figure()
-route_summary = []
-
-for _, row in day_data.iterrows():
-    route_summary.append({
-        "Route": f"{row['ORIGCITY']} to {row['DESTCITY']}",
-        "Total Charge (CAD)": row['TOTAL_CHARGE_CAD'],
-        "Distance (miles)": row['DISTANCE'],
-        "Revenue per Mile": row['Revenue per Mile'],
-        "Profit Margin (%)": row['Profit Margin (%)']
-    })
-
-    fig.add_trace(go.Scattergeo(
-        lon=[row['ORIG_LON'], row['DEST_LON']],
-        lat=[row['ORIG_LAT'], row['DEST_LAT']],
-        mode='lines+markers',
-        marker=dict(size=10),
-        line=dict(width=2),
-        name=f"{row['ORIGCITY']} to {row['DESTCITY']}"
-    ))
-
-st.plotly_chart(fig)
-
-st.write(pd.DataFrame(route_summary))
+    # Display data
+    st.dataframe(day_data[['ORIGCITY', 'DESTCITY', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'Revenue per Mile', 'Profit Margin (%)']])
