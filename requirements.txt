@@ -1,6 +1,6 @@
 pandas
 dash
 plotly
-openpyxl  # For reading Excel files
+openpyxl
 geopy
-warnings
+streamlit
