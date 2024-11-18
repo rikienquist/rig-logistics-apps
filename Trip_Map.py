@@ -79,7 +79,7 @@ tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
 filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
 filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
 
-# Ensure PICK_UP_PUNIT is clean and converted to strings
+# Clean PICK_UP_PUNIT column
 filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
 
 # Calculate Revenue per Mile and Profit Margin
@@ -97,9 +97,13 @@ filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], 
 # Streamlit App
 st.title("Trip Map Viewer")
 
-# PUNIT and Driver ID selection
-selected_punit = st.selectbox("Select PUNIT:", options=sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique()))
-selected_driver = st.selectbox("Select Driver ID (optional):", options=["All"] + sorted(filtered_df['DRIVER_ID'].dropna().astype(str)))
+# Ensure PICK_UP_PUNIT has no mixed types
+punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique().astype(str))
+selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
+
+# Driver ID selection
+driver_options = ["All"] + sorted(filtered_df['DRIVER_ID'].dropna().astype(str))
+selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
 
 # Filter based on selections
 filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
