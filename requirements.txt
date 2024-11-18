@@ -3,5 +3,4 @@ dash
 plotly
 openpyxl  # For reading Excel files
 geopy
-os
 warnings
