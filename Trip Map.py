@@ -1,28 +1,26 @@
-# Import necessary libraries
-import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
 from geopy.distance import geodesic
-import warnings
 
+# Suppress warnings
+import warnings
 warnings.filterwarnings("ignore")
 
-# Streamlit application
-st.title("Trip Map Dashboard")
+# Set page configuration
+st.set_page_config(page_title="Trip Map", layout="wide")
 
-# Load data from GitHub
+# Load the primary datasets
 @st.cache_data
 def load_data():
-    # Adjust paths to point to your GitHub repository
     tlorder_df = pd.read_csv("trip_map_data/TLORDER_Sep2022-Sep2024_V3.csv", low_memory=False)
     geocode_df = pd.read_csv("trip_map_data/merged_geocoded.csv", low_memory=False)
     driver_pay_df = pd.read_csv("trip_map_data/driver_pay_data.csv", low_memory=False)
     return tlorder_df, geocode_df, driver_pay_df
 
-# Load datasets
 tlorder_df, geocode_df, driver_pay_df = load_data()
 
-# Coordinate corrections
+# Dictionary for city-province coordinate corrections
 coordinate_fixes = {
     ("ACHESON", "AB"): {"LAT": 53.5522, "LON": -113.7627},
     ("BALZAC", "AB"): {"LAT": 51.2126, "LON": -114.0076},
@@ -57,6 +55,7 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
+# Function to apply coordinate corrections
 def correct_coordinates(row):
     orig_key = (row['ORIGCITY'], row['ORIGPROV'])
     dest_key = (row['DESTCITY'], row['DESTPROV'])
@@ -66,73 +65,76 @@ def correct_coordinates(row):
         row['DEST_LAT'], row['DEST_LON'] = coordinate_fixes[dest_key].values()
     return row
 
-# Preprocess Data
-st.write("Processing data...")
-tlorder_df = tlorder_df.merge(
-    geocode_df[['ORIGCITY', 'ORIG_LAT', 'ORIG_LON']].drop_duplicates(),
-    on='ORIGCITY', how='left'
-).merge(
-    geocode_df[['DESTCITY', 'DEST_LAT', 'DEST_LON']].drop_duplicates(),
-    on='DESTCITY', how='left'
-).apply(correct_coordinates, axis=1)
+# Data Preprocessing
+def preprocess_data(tlorder_df, geocode_df, driver_pay_df):
+    tlorder_df = tlorder_df.merge(
+        geocode_df[['ORIGCITY', 'ORIG_LAT', 'ORIG_LON']].drop_duplicates(),
+        on='ORIGCITY', how='left'
+    ).merge(
+        geocode_df[['DESTCITY', 'DEST_LAT', 'DEST_LON']].drop_duplicates(),
+        on='DESTCITY', how='left'
+    ).apply(correct_coordinates, axis=1)
 
-tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']]
+    tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']]
 
-driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
-tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
+    driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
+    tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
-    lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
-    axis=1
-)
-filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
-filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
-
-filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
-
-filtered_df['route_key'] = filtered_df[['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON']].apply(tuple, axis=1)
-unique_routes = filtered_df.drop_duplicates(subset='route_key')
-unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
-    lambda r: geodesic((r[0], r[1]), (r[2], r[3])).miles
-)
-filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
-
-# Sidebar for inputs
-st.sidebar.title("Filters")
-selected_punit = st.sidebar.selectbox("Select PUNIT", ["All"] + list(filtered_df['PICK_UP_PUNIT'].unique()))
-selected_driver_id = st.sidebar.selectbox("Select Driver ID", ["All"] + list(filtered_df['DRIVER_ID'].dropna().unique()))
-
-# Filter data
-data = filtered_df
-if selected_punit != "All":
-    data = data[data['PICK_UP_PUNIT'] == selected_punit]
-if selected_driver_id != "All":
-    data = data[data['DRIVER_ID'] == selected_driver_id]
-
-# Display a map with routes
-if not data.empty:
-    fig = go.Figure()
-    for _, row in data.iterrows():
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON'], row['DEST_LON']],
-            lat=[row['ORIG_LAT'], row['DEST_LAT']],
-            mode='lines+markers',
-            line=dict(width=2, color='blue'),
-            marker=dict(size=5),
-            name=f"{row['ORIGCITY']} to {row['DESTCITY']}",
-            hovertext=(
-                f"Route: {row['ORIGCITY']}, {row['ORIGPROV']} → {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
-                f"Profit Margin: {row['Profit Margin (%)']:.2f}%"
-            )
-        ))
-    fig.update_layout(
-        geo=dict(
-            scope='north america',
-            projection_type='mercator'
-        )
+    tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
+        lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'],
+        axis=1
     )
-    st.plotly_chart(fig)
-else:
-    st.write("No data available for the selected filters.")
+    filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
+    filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
+
+    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
+    filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
+
+    filtered_df['route_key'] = filtered_df[['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON']].apply(tuple, axis=1)
+    unique_routes = filtered_df.drop_duplicates(subset='route_key')
+    unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
+        lambda r: geodesic((r[0], r[1]), (r[2], r[3])).miles
+    )
+    filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
+
+    return filtered_df
+
+filtered_df = preprocess_data(tlorder_df, geocode_df, driver_pay_df)
+
+# Interactive Map
+st.title("Trip Visualization")
+punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique())
+driver_options = sorted(filtered_df['DRIVER_ID'].dropna().unique())
+
+selected_punit = st.selectbox("Select PUNIT", options=punit_options, index=0)
+selected_driver = st.selectbox("Select Driver ID (Optional)", options=["All"] + driver_options, index=0)
+
+data = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
+if selected_driver != "All":
+    data = data[data['DRIVER_ID'] == selected_driver]
+
+st.write(f"Showing data for PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}")
+
+fig = go.Figure()
+
+for _, row in data.iterrows():
+    fig.add_trace(go.Scattergeo(
+        lon=[row['ORIG_LON'], row['DEST_LON']],
+        lat=[row['ORIG_LAT'], row['DEST_LAT']],
+        mode='markers+lines',
+        marker=dict(size=8),
+        line=dict(width=2),
+        name=f"Route {row['ORIGCITY']} to {row['DESTCITY']}"
+    ))
+
+fig.update_layout(
+    title="Routes Map",
+    geo=dict(
+        scope='north america',
+        projection_type='mercator',
+        showland=True,
+        landcolor="lightgray"
+    )
+)
+
+st.plotly_chart(fig)
