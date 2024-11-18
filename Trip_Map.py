@@ -79,6 +79,9 @@ tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
 filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
 filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
 
+# Ensure PICK_UP_PUNIT is clean
+filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
+
 # Calculate Revenue per Mile and Profit Margin
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
 filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
@@ -96,7 +99,7 @@ st.title("Trip Map Viewer")
 
 # PUNIT and Driver ID selection
 selected_punit = st.selectbox("Select PUNIT:", options=sorted(filtered_df['PICK_UP_PUNIT'].unique()))
-selected_driver = st.selectbox("Select Driver ID (optional):", options=["All"] + sorted(filtered_df['DRIVER_ID'].dropna().unique().astype(str)))
+selected_driver = st.selectbox("Select Driver ID (optional):", options=["All"] + sorted(filtered_df['DRIVER_ID'].dropna().astype(str)))
 
 # Filter based on selections
 filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
@@ -104,10 +107,9 @@ if selected_driver != "All":
     filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver]
 
 # Day navigation
-days = sorted(filtered_view['PICK_UP_BY'].unique())
-day_index = st.number_input("Day Index", 0, len(days) - 1, 0)
-
-if len(days) > 0:
+days = sorted(filtered_view['PICK_UP_BY'].dropna().unique())
+if days:
+    day_index = st.slider("Select Day Index", 0, len(days) - 1, 0)
     selected_day = days[day_index]
     st.write(f"Viewing data for day: {selected_day}")
     day_data = filtered_view[filtered_view['PICK_UP_BY'] == selected_day]
@@ -129,3 +131,5 @@ if len(days) > 0:
 
     # Display data
     st.dataframe(day_data[['ORIGCITY', 'DESTCITY', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'Revenue per Mile', 'Profit Margin (%)']])
+else:
+    st.warning("No data available for the selected PUNIT and Driver ID.")
