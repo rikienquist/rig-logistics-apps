@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 # Set page configuration
 st.set_page_config(page_title="Trip Map", layout="wide")
 
-# Load the primary datasets
+# Load data
 @st.cache_data
 def load_data():
     tlorder_df = pd.read_csv("trip_map_data/TLORDER_Sep2022-Sep2024_V3.csv", low_memory=False)
@@ -20,7 +20,7 @@ def load_data():
 
 tlorder_df, geocode_df, driver_pay_df = load_data()
 
-# Dictionary for city-province coordinate corrections
+# Coordinate corrections
 coordinate_fixes = {
     ("ACHESON", "AB"): {"LAT": 53.5522, "LON": -113.7627},
     ("BALZAC", "AB"): {"LAT": 51.2126, "LON": -114.0076},
@@ -55,7 +55,7 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
-# Function to apply coordinate corrections
+# Coordinate correction function
 def correct_coordinates(row):
     orig_key = (row['ORIGCITY'], row['ORIGPROV'])
     dest_key = (row['DESTCITY'], row['DESTPROV'])
@@ -65,7 +65,7 @@ def correct_coordinates(row):
         row['DEST_LAT'], row['DEST_LON'] = coordinate_fixes[dest_key].values()
     return row
 
-# Data Preprocessing
+# Preprocessing function
 def preprocess_data(tlorder_df, geocode_df, driver_pay_df):
     tlorder_df = tlorder_df.merge(
         geocode_df[['ORIGCITY', 'ORIG_LAT', 'ORIG_LON']].drop_duplicates(),
@@ -97,11 +97,12 @@ def preprocess_data(tlorder_df, geocode_df, driver_pay_df):
     )
     filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
+    filtered_df['Day'] = pd.to_datetime(filtered_df['PICK_UP_BY']).dt.date
     return filtered_df
 
 filtered_df = preprocess_data(tlorder_df, geocode_df, driver_pay_df)
 
-# Interactive Map
+# Interactive Controls
 st.title("Trip Visualization")
 punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique())
 driver_options = sorted(filtered_df['DRIVER_ID'].dropna().unique())
@@ -109,15 +110,32 @@ driver_options = sorted(filtered_df['DRIVER_ID'].dropna().unique())
 selected_punit = st.selectbox("Select PUNIT", options=punit_options, index=0)
 selected_driver = st.selectbox("Select Driver ID (Optional)", options=["All"] + driver_options, index=0)
 
+# Filter data by PUNIT and Driver ID
 data = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
 if selected_driver != "All":
     data = data[data['DRIVER_ID'] == selected_driver]
 
-st.write(f"Showing data for PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}")
+# Add a slider for days
+unique_days = sorted(data['Day'].unique())
+selected_day = st.slider("Select Day", min_value=min(unique_days), max_value=max(unique_days), format="YYYY-MM-DD")
 
+# Filter data for the selected day
+day_data = data[data['Day'] == selected_day]
+st.write(f"Showing data for {selected_day}, PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}")
+
+# Display detailed table
+st.write("Route Summary Table:")
+st.dataframe(day_data[[
+    "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE",
+    "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", 
+    "Profit Margin (%)", "Geopy_Distance", "One-Way Distance",
+    "Round-Trip Distance", "Trip Type", "PICK_UP_BY"
+]])
+
+# Create map
 fig = go.Figure()
 
-for _, row in data.iterrows():
+for _, row in day_data.iterrows():
     fig.add_trace(go.Scattergeo(
         lon=[row['ORIG_LON'], row['DEST_LON']],
         lat=[row['ORIG_LAT'], row['DEST_LAT']],
