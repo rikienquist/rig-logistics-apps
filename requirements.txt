@@ -2,3 +2,5 @@ pandas
 dash
 plotly
 openpyxl  # For reading Excel files
+geodesic
+os
