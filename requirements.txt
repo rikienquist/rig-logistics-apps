@@ -4,3 +4,4 @@ plotly
 openpyxl  # For reading Excel files
 geodesic
 os
+warnings
