@@ -99,15 +99,6 @@ unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
 )
 filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
-# Calculate One-Way and Round-Trip distances and Trip Type
-filtered_df.loc[:, 'Trip Type'] = filtered_df.apply(
-    lambda x: 'Round-Trip' if x['DISTANCE'] >= 2 * x['Geopy_Distance'] else 'One-Way', axis=1
-)
-filtered_df.loc[:, 'One-Way Distance'] = filtered_df.apply(
-    lambda x: x['DISTANCE'] / 2 if x['Trip Type'] == 'Round-Trip' else x['DISTANCE'], axis=1
-)
-filtered_df.loc[:, 'Round-Trip Distance'] = filtered_df['DISTANCE']
-
 # Streamlit App
 st.title("Trip Map Viewer")
 
@@ -200,9 +191,6 @@ if total_days > 0:
             "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
             "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
             "Geopy_Distance": row['Geopy_Distance'],
-            "One-Way Distance": row['One-Way Distance'],
-            "Round-Trip Distance": row['Round-Trip Distance'],
-            "Trip Type": row['Trip Type'],
             "Date": row['PICK_UP_BY']
         })
 
