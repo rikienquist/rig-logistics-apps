@@ -91,6 +91,14 @@ filtered_df.loc[:, 'PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).f
 filtered_df.loc[:, 'Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
 filtered_df.loc[:, 'Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
 
+# Calculate Geopy Distance
+filtered_df['route_key'] = filtered_df[['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON']].apply(tuple, axis=1)
+unique_routes = filtered_df.drop_duplicates(subset='route_key').copy()
+unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
+    lambda r: geodesic((r[0], r[1]), (r[2], r[3])).miles
+)
+filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
+
 # Add Month Column for Grouping
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
 filtered_df['Month'] = filtered_df['PICK_UP_DATE'].dt.to_period('M')
@@ -129,68 +137,71 @@ if total_months > 0:
     st.write(f"Viewing data for month: {selected_month}")
     month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
-    # Generate map
-    fig = go.Figure()
-    month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
-    label_counter = 1
-    for _, row in month_data.iterrows():
-        # Plot origin and destination
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON']],
-            lat=[row['ORIG_LAT']],
-            mode="markers+text",
-            marker=dict(size=10, color="blue"),
-            text=str(label_counter),
-            textposition="top right",
-            name="Origin",
-        ))
-        fig.add_trace(go.Scattergeo(
-            lon=[row['DEST_LON']],
-            lat=[row['DEST_LAT']],
-            mode="markers+text",
-            marker=dict(size=10, color="red"),
-            text=str(label_counter + 1),
-            textposition="top right",
-            name="Destination",
-        ))
-        # Plot line between origin and destination
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON'], row['DEST_LON']],
-            lat=[row['ORIG_LAT'], row['DEST_LAT']],
-            mode="lines",
-            line=dict(width=2, color="green"),
-            name="Route",
-        ))
-        label_counter += 2
+    # Verify Geopy_Distance exists
+    if 'Geopy_Distance' not in month_data.columns:
+        st.error("Geopy_Distance column is missing. Please verify preprocessing steps.")
+    else:
+        # Generate map
+        fig = go.Figure()
+        month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
+        label_counter = 1
+        for _, row in month_data.iterrows():
+            # Plot origin and destination
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON']],
+                lat=[row['ORIG_LAT']],
+                mode="markers+text",
+                marker=dict(size=10, color="blue"),
+                text=str(label_counter),
+                textposition="top right",
+                name="Origin",
+            ))
+            fig.add_trace(go.Scattergeo(
+                lon=[row['DEST_LON']],
+                lat=[row['DEST_LAT']],
+                mode="markers+text",
+                marker=dict(size=10, color="red"),
+                text=str(label_counter + 1),
+                textposition="top right",
+                name="Destination",
+            ))
+            # Plot line between origin and destination
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON'], row['DEST_LON']],
+                lat=[row['ORIG_LAT'], row['DEST_LAT']],
+                mode="lines",
+                line=dict(width=2, color="green"),
+                name="Route",
+            ))
+            label_counter += 2
 
-    fig.update_layout(
-        title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
-        geo=dict(scope="north america", projection_type="mercator"),
-    )
-    st.plotly_chart(fig)
+        fig.update_layout(
+            title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
+            geo=dict(scope="north america", projection_type="mercator"),
+        )
+        st.plotly_chart(fig)
 
-    # Create the route summary table
-    route_summary = []
-    for _, row in month_data.iterrows():
-        route_summary.append({
-            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
-            "BILL_NUMBER": row['BILL_NUMBER'],
-            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
-            "Distance (miles)": row['DISTANCE'],
-            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
-            "Driver ID": row['DRIVER_ID'],
-            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
-            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Geopy_Distance": row['Geopy_Distance'],
-            "Date": row['PICK_UP_DATE']
-        })
+        # Create the route summary table
+        route_summary = []
+        for _, row in month_data.iterrows():
+            route_summary.append({
+                "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+                "BILL_NUMBER": row['BILL_NUMBER'],
+                "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+                "Distance (miles)": row['DISTANCE'],
+                "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+                "Driver ID": row['DRIVER_ID'],
+                "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
+                "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
+                "Geopy_Distance": row['Geopy_Distance'],
+                "Date": row['PICK_UP_DATE']
+            })
 
-    # Convert the route summary to a DataFrame
-    route_summary_df = pd.DataFrame(route_summary)
+        # Convert the route summary to a DataFrame
+        route_summary_df = pd.DataFrame(route_summary)
 
-    # Display the table
-    st.write("Route Summary:")
-    st.dataframe(route_summary_df)
-
+        # Display the table
+        st.write("Route Summary:")
+        st.dataframe(route_summary_df)
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
