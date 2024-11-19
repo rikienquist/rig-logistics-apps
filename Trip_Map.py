@@ -98,6 +98,15 @@ unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
 )
 filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
+# Calculate One-Way and Round-Trip distances and Trip Type
+filtered_df['Trip Type'] = filtered_df.apply(
+    lambda x: 'Round-Trip' if x['DISTANCE'] >= 2 * x['Geopy_Distance'] else 'One-Way', axis=1
+)
+filtered_df['One-Way Distance'] = filtered_df.apply(
+    lambda x: x['DISTANCE'] / 2 if x['Trip Type'] == 'Round-Trip' else x['DISTANCE'], axis=1
+)
+filtered_df['Round-Trip Distance'] = filtered_df['DISTANCE']
+
 # Streamlit App
 st.title("Trip Map Viewer")
 
