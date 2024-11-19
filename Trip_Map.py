@@ -177,11 +177,42 @@ if total_days > 0:
     )
     st.plotly_chart(fig)
 
-    # Display data
-    st.dataframe(day_data[[
-        'ORIGCITY', 'DESTCITY', 'TOTAL_CHARGE_CAD', 'DISTANCE',
-        'Revenue per Mile', 'Profit Margin (%)', 'DRIVER_ID',
-        'TOTAL_PAY_AMT', 'Geopy_Distance'
-    ]])
+    # Create the route summary table
+    route_summary = []
+    for _, row in day_data.iterrows():
+        route_summary.append({
+            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+            "BILL_NUMBER": row['BILL_NUMBER'],
+            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+            "Distance (miles)": row['DISTANCE'],
+            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+            "Driver ID": row['DRIVER_ID'],
+            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
+            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
+            "Geopy_Distance": row['Geopy_Distance'],
+            "One-Way Distance": row['One-Way Distance'],
+            "Round-Trip Distance": row['Round-Trip Distance'],
+            "Trip Type": row['Trip Type'],
+            "Date": row['PICK_UP_BY']
+        })
+
+    # Convert the route summary to a DataFrame
+    route_summary_df = pd.DataFrame(route_summary)
+
+    # Split the table into two parts if necessary
+    table_columns = route_summary_df.columns
+    split_index = len(table_columns) // 2
+    table1_columns = table_columns[:split_index]
+    table2_columns = table_columns[split_index:]
+
+    # Display the first part of the table
+    st.write("Route Summary - Part 1:")
+    st.dataframe(route_summary_df[table1_columns])
+
+    # Display the second part of the table (if it exists)
+    if len(table2_columns) > 0:
+        st.write("Route Summary - Part 2:")
+        st.dataframe(route_summary_df[table2_columns])
+
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
