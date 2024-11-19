@@ -70,7 +70,7 @@ tlorder_df = tlorder_df.merge(
 tlorder_df = tlorder_df.apply(correct_coordinates, axis=1)
 
 # Filter for non-same-city routes
-tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']]
+tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']].copy()
 
 # Merge with driver pay
 driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
@@ -85,15 +85,15 @@ filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DI
 filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
 
 # Ensure PICK_UP_PUNIT is clean
-filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
+filtered_df.loc[:, 'PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
 
 # Calculate Revenue per Mile and Profit Margin
-filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
+filtered_df.loc[:, 'Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
+filtered_df.loc[:, 'Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
 
 # Calculate Geopy Distance
 filtered_df['route_key'] = filtered_df[['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON']].apply(tuple, axis=1)
-unique_routes = filtered_df.drop_duplicates(subset='route_key')
+unique_routes = filtered_df.drop_duplicates(subset='route_key').copy()
 unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
     lambda r: geodesic((r[0], r[1]), (r[2], r[3])).miles
 )
@@ -119,9 +119,9 @@ driver_options = ["All"] + sorted(filtered_df['DRIVER_ID'].dropna().astype(str))
 selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
 
 # Filter based on selections
-filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]
+filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit].copy()
 if selected_driver != "All":
-    filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver]
+    filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
 
 # Day navigation
 days = sorted(filtered_view['PICK_UP_BY'].dropna().unique())
@@ -146,7 +146,7 @@ col4.button("Ahead 50 Days", on_click=navigate_days, args=("ahead_50",))
 if total_days > 0:
     selected_day = days[st.session_state.day_index]
     st.write(f"Viewing data for day: {selected_day}")
-    day_data = filtered_view[filtered_view['PICK_UP_BY'] == selected_day]
+    day_data = filtered_view[filtered_view['PICK_UP_BY'] == selected_day].copy()
 
     # Generate map
     fig = go.Figure()
