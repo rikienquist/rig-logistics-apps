@@ -43,11 +43,26 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
-# Load data from uploaded files or local paths
+# Optimize DataFrame by reducing memory usage
+def optimize_dataframe(df):
+    for col in df.select_dtypes(include=['float']):
+        df[col] = pd.to_numeric(df[col], downcast='float')
+    for col in df.select_dtypes(include=['int']):
+        df[col] = pd.to_numeric(df[col], downcast='integer')
+    return df
+
+# Cache data loading
+@st.cache_data
+def load_data(file_path, chunk_size=None):
+    if chunk_size:
+        return pd.concat(pd.read_csv(file_path, chunksize=chunk_size, low_memory=False))
+    return pd.read_csv(file_path, low_memory=False)
+
+# Load and optimize data
 data_folder = "trip_map_data"
-tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), low_memory=False)
-geocode_df = pd.read_csv(os.path.join(data_folder, "merged_geocoded.csv"), low_memory=False)
-driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), low_memory=False)
+tlorder_df = optimize_dataframe(load_data(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), chunk_size=10000))
+geocode_df = optimize_dataframe(load_data(os.path.join(data_folder, "merged_geocoded.csv")))
+driver_pay_df = optimize_dataframe(load_data(os.path.join(data_folder, "driver_pay_data.csv")))
 
 # Function to apply coordinate corrections
 def correct_coordinates(row):
@@ -59,7 +74,7 @@ def correct_coordinates(row):
         row['DEST_LAT'], row['DEST_LON'] = coordinate_fixes[dest_key].values()
     return row
 
-# Merge geocodes
+# Apply geocode corrections and merge geocodes
 tlorder_df = tlorder_df.merge(
     geocode_df[['ORIGCITY', 'ORIG_LAT', 'ORIG_LON']].drop_duplicates(),
     on='ORIGCITY', how='left'
@@ -69,14 +84,14 @@ tlorder_df = tlorder_df.merge(
 )
 tlorder_df = tlorder_df.apply(correct_coordinates, axis=1)
 
-# Filter for non-same-city routes
+# Filter out invalid routes
 tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']].copy()
 
 # Merge with driver pay
 driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-# Calculate CAD charge and filter
+# Calculate charges in CAD
 tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
     lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
     axis=1
@@ -105,7 +120,6 @@ def classify_trips(group):
     total_distance = group['DISTANCE'].sum()
 
     if len(group) == 1:
-        # Single BILL_NUMBER logic
         row = group.iloc[0]
         if row['DISTANCE'] < 2 * row['Geopy_Distance']:
             row['Trip Type'] = 'One-Way'
@@ -118,18 +132,16 @@ def classify_trips(group):
         return pd.DataFrame([row])
 
     if total_distance < 2 * unique_geopy_distance_sum:
-        # Each BILL_NUMBER is a one-way
         group['Trip Type'] = 'One-Way'
-        group['One-Way Distance'] = group['DISTANCE']  # Each row's distance is its own One-Way Distance
-        group['Round-Trip Distance'] = total_distance  # Total distance is the Round-Trip Distance for all rows
+        group['One-Way Distance'] = group['DISTANCE']
+        group['Round-Trip Distance'] = total_distance
     else:
-        # Each BILL_NUMBER is part of a round-trip
         group['Trip Type'] = 'Round-Trip'
-        group['Round-Trip Distance'] = total_distance  # Total distance for all
-        group['One-Way Distance'] = total_distance / 2  # Half the total distance as One-Way Distance
+        group['Round-Trip Distance'] = total_distance
+        group['One-Way Distance'] = total_distance / 2
     return group
 
-# Apply trip classification to filtered_df
+# Apply trip classification
 filtered_df = filtered_df.groupby(['PICK_UP_PUNIT', 'PICK_UP_BY'], group_keys=False).apply(classify_trips).reset_index(drop=True)
 
 # Streamlit App
@@ -211,7 +223,7 @@ if total_days > 0:
     )
     st.plotly_chart(fig)
 
-    # Create the route summary table
+    # Create route summary table
     route_summary = []
     for _, row in day_data.iterrows():
         route_summary.append({
@@ -230,12 +242,15 @@ if total_days > 0:
             "Date": row['PICK_UP_BY']
         })
 
-    # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Display the table
-    st.write("Route Summary:")
-    st.dataframe(route_summary_df)
+    # Pagination for large data display
+    page_size = 50
+    page_number = st.number_input("Page Number", min_value=1, max_value=(len(route_summary_df) // page_size) + 1, value=1)
+    start_row = (page_number - 1) * page_size
+    end_row = start_row + page_size
+
+    st.dataframe(route_summary_df.iloc[start_row:end_row])
 
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
