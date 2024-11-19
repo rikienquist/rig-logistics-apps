@@ -66,7 +66,8 @@ tlorder_df = tlorder_df.merge(
 ).merge(
     geocode_df[['DESTCITY', 'DEST_LAT', 'DEST_LON']].drop_duplicates(),
     on='DESTCITY', how='left'
-).apply(correct_coordinates, axis=1)
+)
+tlorder_df = tlorder_df.apply(correct_coordinates, axis=1)
 
 # Filter for non-same-city routes
 tlorder_df = tlorder_df[tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']]
@@ -80,7 +81,7 @@ tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
     lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
     axis=1
 )
-filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)]
+filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)].copy()
 filtered_df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'], inplace=True)
 
 # Ensure PICK_UP_PUNIT is clean
@@ -99,13 +100,13 @@ unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
 filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
 # Calculate One-Way and Round-Trip distances and Trip Type
-filtered_df['Trip Type'] = filtered_df.apply(
+filtered_df.loc[:, 'Trip Type'] = filtered_df.apply(
     lambda x: 'Round-Trip' if x['DISTANCE'] >= 2 * x['Geopy_Distance'] else 'One-Way', axis=1
 )
-filtered_df['One-Way Distance'] = filtered_df.apply(
+filtered_df.loc[:, 'One-Way Distance'] = filtered_df.apply(
     lambda x: x['DISTANCE'] / 2 if x['Trip Type'] == 'Round-Trip' else x['DISTANCE'], axis=1
 )
-filtered_df['Round-Trip Distance'] = filtered_df['DISTANCE']
+filtered_df.loc[:, 'Round-Trip Distance'] = filtered_df['DISTANCE']
 
 # Streamlit App
 st.title("Trip Map Viewer")
@@ -208,20 +209,9 @@ if total_days > 0:
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Split the table into two parts if necessary
-    table_columns = route_summary_df.columns
-    split_index = len(table_columns) // 2
-    table1_columns = table_columns[:split_index]
-    table2_columns = table_columns[split_index:]
-
-    # Display the first part of the table
-    st.write("Route Summary - Part 1:")
-    st.dataframe(route_summary_df[table1_columns])
-
-    # Display the second part of the table (if it exists)
-    if len(table2_columns) > 0:
-        st.write("Route Summary - Part 2:")
-        st.dataframe(route_summary_df[table2_columns])
+    # Display the table
+    st.write("Route Summary:")
+    st.dataframe(route_summary_df)
 
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
