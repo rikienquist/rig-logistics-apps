@@ -43,12 +43,6 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
-# Load data from uploaded files or local paths
-data_folder = "trip_map_data"
-tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), low_memory=False)
-geocode_df = pd.read_csv(os.path.join(data_folder, "merged_geocoded.csv"), low_memory=False)
-driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), low_memory=False)
-
 # Function to apply coordinate corrections
 def correct_coordinates(row):
     orig_key = (row['ORIGCITY'], row['ORIGPROV'])
@@ -99,14 +93,38 @@ unique_routes['Geopy_Distance'] = unique_routes['route_key'].apply(
 )
 filtered_df = filtered_df.merge(unique_routes[['route_key', 'Geopy_Distance']], on='route_key', how='left')
 
-# Calculate One-Way and Round-Trip distances and Trip Type
-filtered_df.loc[:, 'Trip Type'] = filtered_df.apply(
-    lambda x: 'Round-Trip' if x['DISTANCE'] >= 2 * x['Geopy_Distance'] else 'One-Way', axis=1
-)
-filtered_df.loc[:, 'One-Way Distance'] = filtered_df.apply(
-    lambda x: x['DISTANCE'] / 2 if x['Trip Type'] == 'Round-Trip' else x['DISTANCE'], axis=1
-)
-filtered_df.loc[:, 'Round-Trip Distance'] = filtered_df['DISTANCE']
+# Trip classification logic
+def classify_trips(group):
+    unique_geopy_distance_sum = group.drop_duplicates(['ORIGCITY', 'DESTCITY'])['Geopy_Distance'].sum()
+    total_distance = group['DISTANCE'].sum()
+
+    if len(group) == 1:
+        # Single BILL_NUMBER logic
+        row = group.iloc[0]
+        if row['DISTANCE'] < 2 * row['Geopy_Distance']:
+            row['Trip Type'] = 'One-Way'
+            row['Round-Trip Distance'] = row['DISTANCE'] * 2
+            row['One-Way Distance'] = row['DISTANCE']
+        else:
+            row['Trip Type'] = 'Round-Trip'
+            row['One-Way Distance'] = row['DISTANCE'] / 2
+            row['Round-Trip Distance'] = row['DISTANCE']
+        return pd.DataFrame([row])
+
+    if total_distance < 2 * unique_geopy_distance_sum:
+        # Each BILL_NUMBER is a one-way
+        group['Trip Type'] = 'One-Way'
+        group['One-Way Distance'] = group['DISTANCE']  # Each row's distance is its own One-Way Distance
+        group['Round-Trip Distance'] = total_distance  # Total distance is the Round-Trip Distance for all rows
+    else:
+        # Each BILL_NUMBER is part of a round-trip
+        group['Trip Type'] = 'Round-Trip'
+        group['Round-Trip Distance'] = total_distance  # Total distance for all
+        group['One-Way Distance'] = total_distance / 2  # Half the total distance as One-Way Distance
+    return group
+
+# Apply trip classification to filtered_df
+filtered_df = filtered_df.groupby(['PICK_UP_PUNIT', 'PICK_UP_BY'], group_keys=False).apply(classify_trips).reset_index(drop=True)
 
 # Streamlit App
 st.title("Trip Map Viewer")
