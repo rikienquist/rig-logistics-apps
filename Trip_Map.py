@@ -43,6 +43,12 @@ coordinate_fixes = {
     ("MOTLEY", "MN"): {"LAT": 46.3366, "LON": -94.6462},
 }
 
+# Load data from uploaded files or local paths
+data_folder = "trip_map_data"
+tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), low_memory=False)
+geocode_df = pd.read_csv(os.path.join(data_folder, "merged_geocoded.csv"), low_memory=False)
+driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), low_memory=False)
+
 # Function to apply coordinate corrections
 def correct_coordinates(row):
     orig_key = (row['ORIGCITY'], row['ORIGPROV'])
