@@ -163,26 +163,24 @@ if total_months > 0:
     st.plotly_chart(fig)
 
     # Create the route summary table
-    route_summary = []
-    for _, row in month_data.iterrows():
-        route_summary.append({
-            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
-            "BILL_NUMBER": row['BILL_NUMBER'],
-            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
-            "Distance (miles)": row['DISTANCE'],
-            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
-            "Driver ID": row['DRIVER_ID'],
-            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
-            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Geopy_Distance": row['Geopy_Distance'],
-            "Date": row['PICK_UP_DATE']
-        })
+route_summary = []
+for _, row in month_data.iterrows():
+    route_summary.append({
+        "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+        "BILL_NUMBER": row['BILL_NUMBER'],
+        "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+        "Distance (miles)": row['DISTANCE'],
+        "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+        "Driver ID": row['DRIVER_ID'],
+        "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
+        "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
+        "Date": row['PICK_UP_DATE']
+    })
 
-    # Convert the route summary to a DataFrame
-    route_summary_df = pd.DataFrame(route_summary)
+# Convert the route summary to a DataFrame
+route_summary_df = pd.DataFrame(route_summary)
 
-    # Display the table
-    st.write("Route Summary:")
-    st.dataframe(route_summary_df)
-else:
-    st.warning("No data available for the selected PUNIT and Driver ID.")
+# Display the table
+st.write("Route Summary:")
+st.dataframe(route_summary_df)
+
