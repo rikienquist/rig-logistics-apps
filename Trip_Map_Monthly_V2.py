@@ -1,7 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from geopy.distance import geodesic
 import os
 
 # Initialize global variables for navigation
@@ -17,33 +16,28 @@ data_folder = "trip_map_data"
 tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_Sep2022-Sep2024_V3.csv"), low_memory=False)
 driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), low_memory=False)
 
-# Function to get latitude and longitude from city and province
-def get_coordinates(city, province):
-    if pd.notna(city) and pd.notna(province):  # Ensure city and province are not NaN
-        city = str(city).strip().upper()
-        province = str(province).strip().upper()
-        match = city_coordinates_df[
-            (city_coordinates_df['city'] == city) &
-            (city_coordinates_df['province'] == province)
-        ]
-        if not match.empty:
-            return match.iloc[0]['latitude'], match.iloc[0]['longitude']
-    return None, None  # Return None if coordinates are not found or inputs are invalid
+# Preprocess city_coordinates_df for merging
+city_coordinates_df.rename(columns={
+    "city": "ORIGCITY",
+    "province": "ORIGPROV",
+    "latitude": "ORIG_LAT",
+    "longitude": "ORIG_LON"
+}, inplace=True)
 
-# Add coordinates to the TLORDER dataframe
-def add_coordinates(df):
-    # Get origin coordinates
-    df['ORIG_LAT'], df['ORIG_LON'] = zip(*df.apply(
-        lambda row: get_coordinates(row['ORIGCITY'], row['ORIGPROV']), axis=1
-    ))
-    # Get destination coordinates
-    df['DEST_LAT'], df['DEST_LON'] = zip(*df.apply(
-        lambda row: get_coordinates(row['DESTCITY'], row['DESTPROV']), axis=1
-    ))
+# Merge origin coordinates
+tlorder_df = tlorder_df.merge(city_coordinates_df, on=["ORIGCITY", "ORIGPROV"], how="left")
 
-add_coordinates(tlorder_df)
+# Rename columns for destination and merge again
+city_coordinates_df.rename(columns={
+    "ORIGCITY": "DESTCITY",
+    "ORIGPROV": "DESTPROV",
+    "ORIG_LAT": "DEST_LAT",
+    "ORIG_LON": "DEST_LON"
+}, inplace=True)
 
-# Filter for non-same-city routes
+tlorder_df = tlorder_df.merge(city_coordinates_df, on=["DESTCITY", "DESTPROV"], how="left")
+
+# Filter for non-same-city routes and rows with valid coordinates
 tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) & 
                         (pd.notna(tlorder_df['ORIG_LAT'])) & 
                         (pd.notna(tlorder_df['DEST_LAT']))].copy()
@@ -171,8 +165,6 @@ if total_months > 0:
             "Driver ID": row['DRIVER_ID'],
             "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
             "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Geopy_Distance": row['Geopy_Distance'],
-            "Date": row['PICK_UP_DATE']
         })
 
     # Convert the route summary to a DataFrame
