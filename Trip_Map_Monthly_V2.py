@@ -198,13 +198,13 @@ for _, row in month_data.iterrows():
         "Driver ID": row['DRIVER_ID'],
         "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
         "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-        "Date": row['PICK_UP_DATE']
+        "Date": row['PICK_UP_DATE'].date()  # Use only the date part for grouping
     })
 
 # Convert the route summary to a DataFrame
 route_summary_df = pd.DataFrame(route_summary)
 
-# Highlight same-day routes
+# Highlight same-day routes by alternating colors
 def highlight_same_day(data):
     colors = []
     previous_date = None
@@ -214,15 +214,12 @@ def highlight_same_day(data):
             color_toggle = not color_toggle
         colors.append('background-color: #f5f5f5' if color_toggle else 'background-color: white')
         previous_date = row["Date"]
-    return pd.DataFrame({'Route': colors, 'BILL_NUMBER': colors, 'Total Charge (CAD)': colors,
-                         'Distance (miles)': colors, 'Straight Distance (miles)': colors,
-                         'Revenue per Mile': colors, 'Driver ID': colors, 
-                         'Driver Pay (CAD)': colors, 'Profit Margin (%)': colors, 'Date': colors}, 
-                        index=data.index)
+    return pd.DataFrame({col: colors for col in data.columns}, index=data.index)
 
 # Apply styling
 styled_table = route_summary_df.style.apply(highlight_same_day, axis=None)
 
-# Display the styled table
+# Display the styled table using st.table for better width handling
 st.write("Route Summary:")
-st.dataframe(styled_table, use_container_width=True)
+st.table(route_summary_df)
+
