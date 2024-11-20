@@ -19,14 +19,16 @@ driver_pay_df = pd.read_csv(os.path.join(data_folder, "driver_pay_data.csv"), lo
 
 # Function to get latitude and longitude from city and province
 def get_coordinates(city, province):
-    match = city_coordinates_df[
-        (city_coordinates_df['city'] == city.strip().upper()) &
-        (city_coordinates_df['province'] == province.strip().upper())
-    ]
-    if not match.empty:
-        return match.iloc[0]['latitude'], match.iloc[0]['longitude']
-    else:
-        return None, None  # Return None if coordinates are not found
+    if pd.notna(city) and pd.notna(province):  # Ensure city and province are not NaN
+        city = str(city).strip().upper()
+        province = str(province).strip().upper()
+        match = city_coordinates_df[
+            (city_coordinates_df['city'] == city) &
+            (city_coordinates_df['province'] == province)
+        ]
+        if not match.empty:
+            return match.iloc[0]['latitude'], match.iloc[0]['longitude']
+    return None, None  # Return None if coordinates are not found or inputs are invalid
 
 # Add coordinates to the TLORDER dataframe
 def add_coordinates(df):
