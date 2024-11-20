@@ -80,7 +80,7 @@ filtered_df['Straight Distance'] = haversine(
 )
 
 # Streamlit App
-st.title("Trip Map Viewer by Day")
+st.title("Daily Trip Map Viewer")
 
 # PUNIT and Driver ID selection
 punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique())
@@ -118,6 +118,7 @@ col4.button("Ahead 50 Days", on_click=navigate_days, args=("ahead_50",))
 
 if total_days > 0:
     selected_day = days[st.session_state.day_index]
+    st.write(f"Day {st.session_state.day_index + 1} of {total_days}")
     st.write(f"Viewing data for day: {selected_day}")
     day_data = filtered_view[filtered_view['PICK_UP_DATE'] == selected_day].copy()
 
@@ -204,7 +205,6 @@ if total_days > 0:
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Highlight same-day routes (only one day here, so no effect)
     st.write("Route Summary:")
     st.dataframe(route_summary_df, use_container_width=True)
 
