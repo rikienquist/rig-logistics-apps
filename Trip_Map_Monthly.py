@@ -143,7 +143,7 @@ if total_months > 0:
     st.write(f"Viewing data for month: {selected_month}")
     month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
-    # Generate map
+        # Generate map
     fig = go.Figure()
     month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
     label_counter = 1
@@ -158,6 +158,11 @@ if total_months > 0:
                 text=str(label_counter),
                 textposition="top right",
                 name="Origin",
+                hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']}<br>"),
+                hoverinfo="text",
             ))
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -167,6 +172,11 @@ if total_months > 0:
                 text=str(label_counter + 1),
                 textposition="top right",
                 name="Destination",
+                hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']}<br>"),
+                hoverinfo="text",
             ))
         else:  # No legend for subsequent points
             fig.add_trace(go.Scattergeo(
@@ -177,6 +187,11 @@ if total_months > 0:
                 text=str(label_counter),
                 textposition="top right",
                 showlegend=False,
+                hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']}<br>"),
+                hoverinfo="text",
             ))
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -186,6 +201,11 @@ if total_months > 0:
                 text=str(label_counter + 1),
                 textposition="top right",
                 showlegend=False,
+                hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']}<br>"),
+                hoverinfo="text",
             ))
         # Plot line between origin and destination
         if label_counter == 1:  # Add legend for the first route only
@@ -205,6 +225,7 @@ if total_months > 0:
                 showlegend=False,
             ))
         label_counter += 2
+
 
     fig.update_layout(
         title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
