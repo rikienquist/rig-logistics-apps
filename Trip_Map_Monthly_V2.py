@@ -193,16 +193,22 @@ if total_months > 0:
             "BILL_NUMBER": row['BILL_NUMBER'],
             "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
             "Distance (miles)": row['DISTANCE'],
+            "Straight Distance (miles)": row['Straight Distance'],
             "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
             "Driver ID": row['DRIVER_ID'],
             "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
             "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Straight Distance (miles)": row['Straight Distance'],
             "Date": row['PICK_UP_DATE']
         })
 
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
+
+    # Highlight rows by PICK_UP_DATE
+    route_summary_df['Date'] = route_summary_df['Date'].dt.strftime('%Y-%m-%d')  # Format Date column
+    styled_table = route_summary_df.style.apply(
+        lambda x: ['background-color: #f5f5f5' if x.name % 2 == 0 else '' for _ in x], axis=1
+    )
 
     # Display the table
     st.write("Route Summary:")
