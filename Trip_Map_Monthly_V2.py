@@ -186,32 +186,43 @@ if total_months > 0:
     st.plotly_chart(fig)
 
     # Create the route summary table
-    route_summary = []
-    for _, row in month_data.iterrows():
-        route_summary.append({
-            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
-            "BILL_NUMBER": row['BILL_NUMBER'],
-            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
-            "Distance (miles)": row['DISTANCE'],
-            "Straight Distance (miles)": row['Straight Distance'],
-            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
-            "Driver ID": row['DRIVER_ID'],
-            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
-            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Date": row['PICK_UP_DATE']
-        })
+route_summary = []
+for _, row in month_data.iterrows():
+    route_summary.append({
+        "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+        "BILL_NUMBER": row['BILL_NUMBER'],
+        "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+        "Distance (miles)": row['DISTANCE'],
+        "Straight Distance (miles)": row['Straight Distance'],
+        "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+        "Driver ID": row['DRIVER_ID'],
+        "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
+        "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
+        "Date": row['PICK_UP_DATE']
+    })
 
-    # Convert the route summary to a DataFrame
-    route_summary_df = pd.DataFrame(route_summary)
+# Convert the route summary to a DataFrame
+route_summary_df = pd.DataFrame(route_summary)
 
-    # Highlight rows by PICK_UP_DATE
-    route_summary_df['Date'] = route_summary_df['Date'].dt.strftime('%Y-%m-%d')  # Format Date column
-    styled_table = route_summary_df.style.apply(
-        lambda x: ['background-color: #f5f5f5' if x.name % 2 == 0 else '' for _ in x], axis=1
-    )
+# Highlight same-day routes
+def highlight_same_day(data):
+    colors = []
+    previous_date = None
+    color_toggle = False
+    for _, row in data.iterrows():
+        if row["Date"] != previous_date:
+            color_toggle = not color_toggle
+        colors.append('background-color: #f5f5f5' if color_toggle else 'background-color: white')
+        previous_date = row["Date"]
+    return pd.DataFrame({'Route': colors, 'BILL_NUMBER': colors, 'Total Charge (CAD)': colors,
+                         'Distance (miles)': colors, 'Straight Distance (miles)': colors,
+                         'Revenue per Mile': colors, 'Driver ID': colors, 
+                         'Driver Pay (CAD)': colors, 'Profit Margin (%)': colors, 'Date': colors}, 
+                        index=data.index)
 
-    # Display the table
-    st.write("Route Summary:")
-    st.dataframe(route_summary_df)
-else:
-    st.warning("No data available for the selected PUNIT and Driver ID.")
+# Apply styling
+styled_table = route_summary_df.style.apply(highlight_same_day, axis=None)
+
+# Display the styled table
+st.write("Route Summary:")
+st.dataframe(styled_table, use_container_width=True)
