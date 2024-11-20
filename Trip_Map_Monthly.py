@@ -37,6 +37,7 @@ coordinate_fixes = {
     ("WINKLER", "MB"): {"LAT": 49.1802, "LON": -97.9391},
     ("BOLTON", "ON"): {"LAT": 43.8742, "LON": -79.7307},
     ("LIVELY", "ON"): {"LAT": 46.4366, "LON": -81.1466},
+    ("SAINT-LAURENT", "QC"): {"LAT": 45.5023, "LON": -73.7061},
     ("VERNON", "CA"): {"LAT": 34.0039, "LON": -118.2301},
     ("SELMA", "CA"): {"LAT": 36.5708, "LON": -119.6121},
     ("TROY", "NY"): {"LAT": 42.7284, "LON": -73.6918},
