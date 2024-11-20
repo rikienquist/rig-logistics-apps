@@ -107,60 +107,70 @@ if total_months > 0:
     month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     # Generate map
-    fig = go.Figure()
-    month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
-    label_counter = 1
-    legend_added = {"Origin": False, "Destination": False, "Route": False}
-    for i, row in month_data.iterrows():
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON']],
-            lat=[row['ORIG_LAT']],
-            mode="markers+text",
-            marker=dict(size=10, color="blue"),
-            text=str(label_counter),
-            textposition="top right",
-            name="Origin" if not legend_added["Origin"] else None,
-            hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                       f"Date: {row['PICK_UP_DATE']}<br>"
-                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                       f"Distance (miles): {row['DISTANCE']}<br>"),
-            hoverinfo="text",
-        ))
-        legend_added["Origin"] = True
+fig = go.Figure()
+month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
+label_counter = 1
+legend_added = {"Origin": False, "Destination": False, "Route": False}  # Track if the legend was added
 
-        fig.add_trace(go.Scattergeo(
-            lon=[row['DEST_LON']],
-            lat=[row['DEST_LAT']],
-            mode="markers+text",
-            marker=dict(size=10, color="red"),
-            text=str(label_counter + 1),
-            textposition="top right",
-            name="Destination" if not legend_added["Destination"] else None,
-            hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                       f"Date: {row['PICK_UP_DATE']}<br>"
-                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                       f"Distance (miles): {row['DISTANCE']}<br>"),
-            hoverinfo="text",
-        ))
-        legend_added["Destination"] = True
+for i, row in month_data.iterrows():
+    # Add Origin point
+    fig.add_trace(go.Scattergeo(
+        lon=[row['ORIG_LON']],
+        lat=[row['ORIG_LAT']],
+        mode="markers+text",
+        marker=dict(size=10, color="blue"),
+        text=str(label_counter),
+        textposition="top right",
+        name="Origin" if not legend_added["Origin"] else None,  # Add legend only for the first occurrence
+        hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                   f"Date: {row['PICK_UP_DATE']}<br>"
+                   f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                   f"Distance (miles): {row['DISTANCE']}<br>"),
+        hoverinfo="text",
+        showlegend=not legend_added["Origin"],  # Show legend only if not added yet
+    ))
+    legend_added["Origin"] = True  # Mark legend for "Origin" as added
 
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON'], row['DEST_LON']],
-            lat=[row['ORIG_LAT'], row['DEST_LAT']],
-            mode="lines",
-            line=dict(width=2, color="green"),
-            name="Route" if not legend_added["Route"] else None,
-            hoverinfo="skip",
-        ))
-        legend_added["Route"] = True
+    # Add Destination point
+    fig.add_trace(go.Scattergeo(
+        lon=[row['DEST_LON']],
+        lat=[row['DEST_LAT']],
+        mode="markers+text",
+        marker=dict(size=10, color="red"),
+        text=str(label_counter + 1),
+        textposition="top right",
+        name="Destination" if not legend_added["Destination"] else None,  # Add legend only for the first occurrence
+        hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                   f"Date: {row['PICK_UP_DATE']}<br>"
+                   f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                   f"Distance (miles): {row['DISTANCE']}<br>"),
+        hoverinfo="text",
+        showlegend=not legend_added["Destination"],  # Show legend only if not added yet
+    ))
+    legend_added["Destination"] = True  # Mark legend for "Destination" as added
 
-        label_counter += 2
+    # Add Route line
+    fig.add_trace(go.Scattergeo(
+        lon=[row['ORIG_LON'], row['DEST_LON']],
+        lat=[row['ORIG_LAT'], row['DEST_LAT']],
+        mode="lines",
+        line=dict(width=2, color="green"),
+        name="Route" if not legend_added["Route"] else None,  # Add legend only for the first occurrence
+        hoverinfo="skip",
+        showlegend=not legend_added["Route"],  # Show legend only if not added yet
+    ))
+    legend_added["Route"] = True  # Mark legend for "Route" as added
 
-    fig.update_layout(
-        title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
-        geo=dict(scope="north america", projection_type="mercator"),
-    )
-    st.plotly_chart(fig)
+    label_counter += 2
+
+# Update map layout
+fig.update_layout(
+    title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
+    geo=dict(scope="north america", projection_type="mercator"),
+)
+
+st.plotly_chart(fig)
+
 
     # Create the route summary table
 route_summary = []
