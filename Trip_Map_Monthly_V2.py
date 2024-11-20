@@ -221,5 +221,5 @@ styled_table = route_summary_df.style.apply(highlight_same_day, axis=None)
 
 # Display the styled table using st.table for better width handling
 st.write("Route Summary:")
-st.table(route_summary_df)
+st.dataframe(route_summary_df)
 
