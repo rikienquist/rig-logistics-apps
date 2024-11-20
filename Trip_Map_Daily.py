@@ -80,7 +80,7 @@ filtered_df['Straight Distance'] = haversine(
 )
 
 # Streamlit App
-st.title("Daily Trip Map Viewer")
+st.title(Trip Map Viewer by Day")
 
 # PUNIT and Driver ID selection
 punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique())
