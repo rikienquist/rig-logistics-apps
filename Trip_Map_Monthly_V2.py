@@ -1,6 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import numpy as np
 import os
 
 # Initialize global variables for navigation
@@ -64,6 +65,21 @@ filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_d
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
 filtered_df['Month'] = filtered_df['PICK_UP_DATE'].dt.to_period('M')
 
+# Calculate Straight Distance using Haversine formula
+def haversine(lat1, lon1, lat2, lon2):
+    R = 3958.8  # Radius of Earth in miles
+    lat1, lat2 = np.radians(lat1), np.radians(lat2)
+    dlat = lat2 - lat1
+    dlon = np.radians(lon2 - lon1)
+    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
+
+filtered_df['Straight Distance'] = haversine(
+    filtered_df['ORIG_LAT'], filtered_df['ORIG_LON'],
+    filtered_df['DEST_LAT'], filtered_df['DEST_LON']
+)
+
 # Streamlit App
 st.title("Trip Map Viewer by Month")
 
@@ -107,90 +123,89 @@ if total_months > 0:
     month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     # Generate map
-fig = go.Figure()
-month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
-label_counter = 1
-legend_added = {"Origin": False, "Destination": False, "Route": False}  # Track if the legend was added
+    fig = go.Figure()
+    month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
+    label_counter = 1
+    legend_added = {"Origin": False, "Destination": False, "Route": False}  # Track if the legend was added
 
-for i, row in month_data.iterrows():
-    # Add Origin point
-    fig.add_trace(go.Scattergeo(
-        lon=[row['ORIG_LON']],
-        lat=[row['ORIG_LAT']],
-        mode="markers+text",
-        marker=dict(size=10, color="blue"),
-        text=str(label_counter),
-        textposition="top right",
-        name="Origin" if not legend_added["Origin"] else None,  # Add legend only for the first occurrence
-        hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                   f"Date: {row['PICK_UP_DATE']}<br>"
-                   f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                   f"Distance (miles): {row['DISTANCE']}<br>"),
-        hoverinfo="text",
-        showlegend=not legend_added["Origin"],  # Show legend only if not added yet
-    ))
-    legend_added["Origin"] = True  # Mark legend for "Origin" as added
+    for i, row in month_data.iterrows():
+        # Add Origin point
+        fig.add_trace(go.Scattergeo(
+            lon=[row['ORIG_LON']],
+            lat=[row['ORIG_LAT']],
+            mode="markers+text",
+            marker=dict(size=10, color="blue"),
+            text=str(label_counter),
+            textposition="top right",
+            name="Origin" if not legend_added["Origin"] else None,
+            hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                       f"Date: {row['PICK_UP_DATE']}<br>"
+                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                       f"Distance (miles): {row['DISTANCE']}<br>"),
+            hoverinfo="text",
+            showlegend=not legend_added["Origin"],  # Show legend only if not added yet
+        ))
+        legend_added["Origin"] = True
 
-    # Add Destination point
-    fig.add_trace(go.Scattergeo(
-        lon=[row['DEST_LON']],
-        lat=[row['DEST_LAT']],
-        mode="markers+text",
-        marker=dict(size=10, color="red"),
-        text=str(label_counter + 1),
-        textposition="top right",
-        name="Destination" if not legend_added["Destination"] else None,  # Add legend only for the first occurrence
-        hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                   f"Date: {row['PICK_UP_DATE']}<br>"
-                   f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                   f"Distance (miles): {row['DISTANCE']}<br>"),
-        hoverinfo="text",
-        showlegend=not legend_added["Destination"],  # Show legend only if not added yet
-    ))
-    legend_added["Destination"] = True  # Mark legend for "Destination" as added
+        # Add Destination point
+        fig.add_trace(go.Scattergeo(
+            lon=[row['DEST_LON']],
+            lat=[row['DEST_LAT']],
+            mode="markers+text",
+            marker=dict(size=10, color="red"),
+            text=str(label_counter + 1),
+            textposition="top right",
+            name="Destination" if not legend_added["Destination"] else None,
+            hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                       f"Date: {row['PICK_UP_DATE']}<br>"
+                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                       f"Distance (miles): {row['DISTANCE']}<br>"),
+            hoverinfo="text",
+            showlegend=not legend_added["Destination"],  # Show legend only if not added yet
+        ))
+        legend_added["Destination"] = True
 
-    # Add Route line
-    fig.add_trace(go.Scattergeo(
-        lon=[row['ORIG_LON'], row['DEST_LON']],
-        lat=[row['ORIG_LAT'], row['DEST_LAT']],
-        mode="lines",
-        line=dict(width=2, color="green"),
-        name="Route" if not legend_added["Route"] else None,  # Add legend only for the first occurrence
-        hoverinfo="skip",
-        showlegend=not legend_added["Route"],  # Show legend only if not added yet
-    ))
-    legend_added["Route"] = True  # Mark legend for "Route" as added
+        # Add Route line
+        fig.add_trace(go.Scattergeo(
+            lon=[row['ORIG_LON'], row['DEST_LON']],
+            lat=[row['ORIG_LAT'], row['DEST_LAT']],
+            mode="lines",
+            line=dict(width=2, color="green"),
+            name="Route" if not legend_added["Route"] else None,
+            hoverinfo="skip",
+            showlegend=not legend_added["Route"],  # Show legend only if not added yet
+        ))
+        legend_added["Route"] = True
 
-    label_counter += 2
+        label_counter += 2
 
-# Update map layout
-fig.update_layout(
-    title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
-    geo=dict(scope="north america", projection_type="mercator"),
-)
-
-st.plotly_chart(fig)
-
+    fig.update_layout(
+        title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
+        geo=dict(scope="north america", projection_type="mercator"),
+    )
+    st.plotly_chart(fig)
 
     # Create the route summary table
-route_summary = []
-for _, row in month_data.iterrows():
-    route_summary.append({
-        "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
-        "BILL_NUMBER": row['BILL_NUMBER'],
-        "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
-        "Distance (miles)": row['DISTANCE'],
-        "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
-        "Driver ID": row['DRIVER_ID'],
-        "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
-        "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-        "Date": row['PICK_UP_DATE']
-    })
+    route_summary = []
+    for _, row in month_data.iterrows():
+        route_summary.append({
+            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+            "BILL_NUMBER": row['BILL_NUMBER'],
+            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+            "Distance (miles)": row['DISTANCE'],
+            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+            "Driver ID": row['DRIVER_ID'],
+            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
+            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
+            "Straight Distance (miles)": row['Straight Distance'],
+            "Date": row['PICK_UP_DATE']
+        })
 
-# Convert the route summary to a DataFrame
-route_summary_df = pd.DataFrame(route_summary)
+    # Convert the route summary to a DataFrame
+    route_summary_df = pd.DataFrame(route_summary)
 
-# Display the table
-st.write("Route Summary:")
-st.dataframe(route_summary_df)
-
+    # Display the table
+    st.write("Route Summary:")
+    st.dataframe(route_summary_df)
+else:
+    st.warning("No data available for the selected PUNIT and Driver ID.")
