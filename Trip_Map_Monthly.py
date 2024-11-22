@@ -217,8 +217,12 @@ if total_months > 0:
         "Profit (CAD)": route_summary_df["Profit (CAD)"].sum(),
         "Date": ""
     }
-    route_summary_df = route_summary_df.append(grand_totals, ignore_index=True)
-
+    
+    # Use pd.concat instead of append
+    grand_totals_df = pd.DataFrame([grand_totals])  # Create a DataFrame for the totals
+    route_summary_df = pd.concat([route_summary_df, grand_totals_df], ignore_index=True)
+    
     # Display the table with grand totals
     st.write("Route Summary:")
     st.dataframe(route_summary_df, use_container_width=True)
+
