@@ -57,9 +57,9 @@ filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DI
 # Ensure PICK_UP_PUNIT is clean
 filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
 
-# Calculate Revenue per Mile and Profit Margin
+# Calculate Revenue per Mile and Profit
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-filtered_df['Profit Margin (%)'] = (filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['TOTAL_PAY_AMT']) * 100
+filtered_df['Profit'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
 # Add Month Column for Grouping
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
@@ -134,7 +134,7 @@ if total_months > 0:
             lon=[row['ORIG_LON']],
             lat=[row['ORIG_LAT']],
             mode="markers+text",
-            marker=dict(size=10, color="blue"),
+            marker=dict(size=10),
             text=str(label_counter),
             textposition="top right",
             name="Origin" if not legend_added["Origin"] else None,
@@ -152,7 +152,7 @@ if total_months > 0:
             lon=[row['DEST_LON']],
             lat=[row['DEST_LAT']],
             mode="markers+text",
-            marker=dict(size=10, color="red"),
+            marker=dict(size=10),
             text=str(label_counter + 1),
             textposition="top right",
             name="Destination" if not legend_added["Destination"] else None,
@@ -170,7 +170,7 @@ if total_months > 0:
             lon=[row['ORIG_LON'], row['DEST_LON']],
             lat=[row['ORIG_LAT'], row['DEST_LAT']],
             mode="lines",
-            line=dict(width=2, color="green"),
+            line=dict(width=2),
             name="Route" if not legend_added["Route"] else None,
             hoverinfo="skip",
             showlegend=not legend_added["Route"],  # Show legend only if not added yet
@@ -191,37 +191,34 @@ if total_months > 0:
         route_summary.append({
             "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
             "BILL_NUMBER": row['BILL_NUMBER'],
-            "Total Charge (CAD)": f"${row['TOTAL_CHARGE_CAD']:.2f}",
+            "Total Charge (CAD)": row['TOTAL_CHARGE_CAD'],
             "Distance (miles)": row['DISTANCE'],
             "Straight Distance (miles)": row['Straight Distance'],
-            "Revenue per Mile": f"${row['Revenue per Mile']:.2f}",
+            "Revenue per Mile": row['Revenue per Mile'],
             "Driver ID": row['DRIVER_ID'],
-            "Driver Pay (CAD)": f"${row['TOTAL_PAY_AMT']:.2f}" if not pd.isna(row['TOTAL_PAY_AMT']) else "N/A",
-            "Profit Margin (%)": f"{row['Profit Margin (%)']:.2f}%" if not pd.isna(row['Profit Margin (%)']) else "N/A",
-            "Date": row['PICK_UP_DATE']  # Keep full datetime for display
+            "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
+            "Profit (CAD)": row['Profit'],
+            "Date": row['PICK_UP_DATE']
         })
     
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
-    
-    # Highlight same-day routes by alternating colors
-    def highlight_same_day(data):
-        colors = []
-        previous_date = None
-        color_toggle = False
-        for _, row in data.iterrows():
-            # Compare only the date part for same-day grouping
-            current_date = row["Date"].date()
-            if current_date != previous_date:
-                color_toggle = not color_toggle
-            colors.append('background-color: #d3d3d3' if color_toggle else 'background-color: white')
-            previous_date = current_date
-        return pd.DataFrame({col: colors for col in data.columns}, index=data.index)
-    
-    # Apply styling
-    styled_table = route_summary_df.style.apply(highlight_same_day, axis=None)
-    
-    # Display the styled table with st.dataframe and full container width
+
+    # Add grand totals row
+    grand_totals = {
+        "Route": "Grand Totals",
+        "BILL_NUMBER": "",
+        "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
+        "Distance (miles)": "",
+        "Straight Distance (miles)": "",
+        "Revenue per Mile": "",
+        "Driver ID": "",
+        "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
+        "Profit (CAD)": route_summary_df["Profit (CAD)"].sum(),
+        "Date": ""
+    }
+    route_summary_df = route_summary_df.append(grand_totals, ignore_index=True)
+
+    # Display the table with grand totals
     st.write("Route Summary:")
-    st.dataframe(styled_table, use_container_width=True)
-    
+    st.dataframe(route_summary_df, use_container_width=True)
