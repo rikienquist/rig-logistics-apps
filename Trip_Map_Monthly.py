@@ -126,6 +126,67 @@ if total_months > 0:
     fig = go.Figure()
     month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
 
+    # Add map traces
+    label_counter = 1
+    legend_added = {"Origin": False, "Destination": False, "Route": False}
+    for _, row in month_data.iterrows():
+        # Origin marker
+        fig.add_trace(go.Scattergeo(
+            lon=[row['ORIG_LON']],
+            lat=[row['ORIG_LAT']],
+            mode="markers+text",
+            marker=dict(size=10, color="blue"),
+            text=str(label_counter),
+            textposition="top right",
+            name="Origin" if not legend_added["Origin"] else None,
+            hoverinfo="text",
+            hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                       f"Date: {row['PICK_UP_DATE']}<br>"
+                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                       f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
+            showlegend=not legend_added["Origin"],
+        ))
+        legend_added["Origin"] = True
+
+        # Destination marker
+        fig.add_trace(go.Scattergeo(
+            lon=[row['DEST_LON']],
+            lat=[row['DEST_LAT']],
+            mode="markers+text",
+            marker=dict(size=10, color="red"),
+            text=str(label_counter + 1),
+            textposition="top right",
+            name="Destination" if not legend_added["Destination"] else None,
+            hoverinfo="text",
+            hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                       f"Date: {row['PICK_UP_DATE']}<br>"
+                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                       f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
+            showlegend=not legend_added["Destination"],
+        ))
+        legend_added["Destination"] = True
+
+        # Route line
+        fig.add_trace(go.Scattergeo(
+            lon=[row['ORIG_LON'], row['DEST_LON']],
+            lat=[row['ORIG_LAT'], row['DEST_LAT']],
+            mode="lines",
+            line=dict(width=2, color="green"),
+            name="Route" if not legend_added["Route"] else None,
+            hoverinfo="skip",
+            showlegend=not legend_added["Route"],
+        ))
+        legend_added["Route"] = True
+
+        label_counter += 2
+
+    # Update map layout
+    fig.update_layout(
+        title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
+        geo=dict(scope="north america", projection_type="mercator"),
+    )
+    st.plotly_chart(fig)
+
     # Create the route summary table
     route_summary = []
     for _, row in month_data.iterrows():
@@ -145,40 +206,9 @@ if total_months > 0:
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Round Straight Distance to 1 decimal place
-    route_summary_df['Straight Distance (miles)'] = route_summary_df['Straight Distance (miles)'].round(1)
-
-    # Calculate grand totals
-    total_charge = route_summary_df["Total Charge (CAD)"].sum()
-    total_distance = route_summary_df["Distance (miles)"].sum()
-    total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
-    total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
-    total_profit = route_summary_df["Profit (CAD)"].sum()
-    grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
-
-    # Add grand totals row
-    grand_totals = {
-        "Route": "Grand Totals",
-        "BILL_NUMBER": "",
-        "Total Charge (CAD)": f"${total_charge:,.2f}",
-        "Distance (miles)": f"{total_distance:,.2f}",
-        "Straight Distance (miles)": f"{total_straight_distance:,.1f}",
-        "Revenue per Mile": f"${grand_revenue_per_mile:,.2f}",
-        "Driver ID": "",
-        "Driver Pay (CAD)": f"${total_driver_pay:,.2f}",
-        "Profit (CAD)": f"${total_profit:,.2f}",
-        "Date": ""
-    }
-
-    # Use pd.concat instead of append
-    grand_totals_df = pd.DataFrame([grand_totals])  # Create a DataFrame for the totals
-    route_summary_df = pd.concat([route_summary_df, grand_totals_df], ignore_index=True)
-
-    # Format the DataFrame for display with currency formatting
-    currency_columns = ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]
-    for col in currency_columns:
-        route_summary_df[col] = route_summary_df[col].apply(lambda x: f"${float(x):,.2f}" if isinstance(x, (int, float)) else x)
-
-    # Display the table with grand totals
+    # Format the DataFrame for display
     st.write("Route Summary:")
     st.dataframe(route_summary_df, use_container_width=True)
+
+else:
+    st.warning("No data available for the selected PUNIT and Driver ID.")
