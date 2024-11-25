@@ -206,7 +206,36 @@ if total_months > 0:
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Format the DataFrame for display
+    # Calculate grand totals
+    total_charge = route_summary_df["Total Charge (CAD)"].sum()
+    total_distance = route_summary_df["Distance (miles)"].sum()
+    total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
+    total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
+    total_profit = route_summary_df["Profit (CAD)"].sum()
+    grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
+
+    # Add grand totals row
+    grand_totals = {
+        "Route": "Grand Totals",
+        "BILL_NUMBER": "",
+        "Total Charge (CAD)": total_charge,
+        "Distance (miles)": total_distance,
+        "Straight Distance (miles)": total_straight_distance,
+        "Revenue per Mile": grand_revenue_per_mile,
+        "Driver ID": "",
+        "Driver Pay (CAD)": total_driver_pay,
+        "Profit (CAD)": total_profit,
+        "Date": ""
+    }
+
+    # Add grand totals to DataFrame
+    route_summary_df = pd.concat([route_summary_df, pd.DataFrame([grand_totals])], ignore_index=True)
+
+    # Format currency columns
+    for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
+        route_summary_df[col] = route_summary_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+
+    # Display the route summary table
     st.write("Route Summary:")
     st.dataframe(route_summary_df, use_container_width=True)
 
