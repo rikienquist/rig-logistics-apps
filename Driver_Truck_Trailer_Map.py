@@ -80,6 +80,10 @@ if uploaded_file:
     # Sort by INS_TIMESTAMP
     filtered_df = filtered_df.sort_values(by="INS_TIMESTAMP").reset_index(drop=True)
 
+    # Add a 'Day' column to group data by day
+    filtered_df['INS_TIMESTAMP'] = pd.to_datetime(filtered_df['INS_TIMESTAMP'])
+    filtered_df['Day'] = filtered_df['INS_TIMESTAMP'].dt.date
+
     # Map Visualization
     if not filtered_df.empty:
         fig = go.Figure()
@@ -141,8 +145,6 @@ if uploaded_file:
 
     # Details Table
     st.write("Details:")
-    filtered_df['INS_TIMESTAMP'] = pd.to_datetime(filtered_df['INS_TIMESTAMP'])
-    filtered_df['Day'] = filtered_df['INS_TIMESTAMP'].dt.date
 
     # Highlight rows by day
     def highlight_same_day(dataframe):
@@ -158,9 +160,6 @@ if uploaded_file:
         return pd.DataFrame(styles, index=dataframe.index, columns=dataframe.columns)
 
     styled_table = filtered_df.style.apply(highlight_same_day, axis=None)
-    st.dataframe(filtered_df[[
-        "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
-        "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_same_day, axis=None))
+    st.dataframe(styled_table)
 else:
     st.info("Please upload a file to proceed.")
