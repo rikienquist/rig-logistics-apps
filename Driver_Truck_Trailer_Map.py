@@ -134,20 +134,29 @@ if uploaded_file:
     st.write("Details:")
     details_df = filtered_df.copy()
     
-    # Highlight rows from the same day
+    # Sort by INS_TIMESTAMP
+    details_df = details_df.sort_values(by='INS_TIMESTAMP')
     details_df['Day'] = pd.to_datetime(details_df['INS_TIMESTAMP']).dt.date
-    details_df = details_df.sort_values(by=['INS_TIMESTAMP'])
-    
-    def highlight_same_day(row, highlight_color="background-color: #ffffcc"):
-        if row.name > 0 and details_df.iloc[row.name]['Day'] == details_df.iloc[row.name - 1]['Day']:
-            return [highlight_color] * len(row)
-        return [""] * len(row)
-    
-    styled_table = details_df.style.apply(highlight_same_day, axis=1)
+
+    # Highlight rows from the same day
+    def highlight_rows(data):
+        # Assign alternating colors to different days
+        styles = []
+        current_day = None
+        color_cycle = ["background-color: #f0f8ff;", "background-color: #fffacd;"]
+        color_index = 0
+        for _, row in data.iterrows():
+            if row['Day'] != current_day:
+                current_day = row['Day']
+                color_index = (color_index + 1) % 2
+            styles.append(color_cycle[color_index])
+        return pd.DataFrame([styles] * len(data.columns), columns=data.columns, index=data.index).transpose()
+
+    styled_table = details_df.style.apply(highlight_rows, axis=None)
     
     st.dataframe(details_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
         "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_same_day, axis=1))
+    ]].style.apply(highlight_rows, axis=None))
 else:
     st.info("Please upload a file to proceed.")
