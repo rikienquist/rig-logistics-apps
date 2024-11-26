@@ -50,18 +50,27 @@ if uploaded_file:
         how="left"
     )
 
+    # Ensure consistent data types for filtering
+    df['LS_POWER_UNIT'] = df['LS_POWER_UNIT'].astype(str)
+    df['LS_DRIVER'] = df['LS_DRIVER'].astype(str)
+    df['LS_TRAILER1'] = df['LS_TRAILER1'].astype(str)
+
     # Sidebar Filters
     st.sidebar.header("Filters")
 
-    # Initial filter options
-    selected_truck = st.sidebar.selectbox("Select Truck Unit:", ["None"] + sorted(df["LS_POWER_UNIT"].dropna().unique()))
-    if selected_truck != "None":
-        relevant_drivers = df[df["LS_POWER_UNIT"] == selected_truck]["LS_DRIVER"].dropna().unique()
-        relevant_trailers = df[df["LS_POWER_UNIT"] == selected_truck]["LS_TRAILER1"].dropna().unique()
-    else:
-        relevant_drivers = df["LS_DRIVER"].dropna().unique()
-        relevant_trailers = df["LS_TRAILER1"].dropna().unique()
+    # Truck Unit filter
+    truck_options = sorted(df['LS_POWER_UNIT'].dropna().unique())
+    selected_truck = st.sidebar.selectbox("Select Truck Unit:", ["None"] + truck_options)
 
+    # Update Driver ID options based on Truck Unit selection
+    if selected_truck != "None":
+        relevant_drivers = df[df['LS_POWER_UNIT'] == selected_truck]['LS_DRIVER'].dropna().unique()
+        relevant_trailers = df[df['LS_POWER_UNIT'] == selected_truck]['LS_TRAILER1'].dropna().unique()
+    else:
+        relevant_drivers = df['LS_DRIVER'].dropna().unique()
+        relevant_trailers = df['LS_TRAILER1'].dropna().unique()
+
+    # Driver ID and Trailer Unit filters
     selected_driver = st.sidebar.selectbox(
         "Select Driver ID:", ["None"] + ["All"] + sorted(relevant_drivers)
     )
@@ -72,11 +81,11 @@ if uploaded_file:
     # Apply filters
     filtered_df = df.copy()
     if selected_truck != "None":
-        filtered_df = filtered_df[filtered_df["LS_POWER_UNIT"] == selected_truck]
+        filtered_df = filtered_df[filtered_df['LS_POWER_UNIT'] == selected_truck]
     if selected_driver != "None" and selected_driver != "All":
-        filtered_df = filtered_df[filtered_df["LS_DRIVER"] == selected_driver]
+        filtered_df = filtered_df[filtered_df['LS_DRIVER'] == selected_driver]
     if selected_trailer != "None" and selected_trailer != "All":
-        filtered_df = filtered_df[filtered_df["LS_TRAILER1"] == selected_trailer]
+        filtered_df = filtered_df[filtered_df['LS_TRAILER1'] == selected_trailer]
 
     # Sort by INS_TIMESTAMP
     filtered_df = filtered_df.sort_values(by="INS_TIMESTAMP").reset_index(drop=True)
