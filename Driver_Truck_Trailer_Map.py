@@ -50,6 +50,11 @@ if uploaded_file:
         how="left"
     )
 
+    # Ensure columns used for filters are treated as strings
+    df['LS_POWER_UNIT'] = df['LS_POWER_UNIT'].astype(str)
+    df['LS_DRIVER'] = df['LS_DRIVER'].astype(str)
+    df['LS_TRAILER1'] = df['LS_TRAILER1'].astype(str)
+
     # Sidebar Filters with Dynamic Options
     st.sidebar.header("Filters")
 
