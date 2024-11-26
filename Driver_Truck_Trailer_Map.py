@@ -79,7 +79,7 @@ if uploaded_file:
     # Display the map
     if not filtered_df.empty:
         fig = go.Figure()
-        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        show_legend = {"Origin": True, "Destination": True, "Route": True}
         
         for i, row in filtered_df.iterrows():
             # Add markers for origin
@@ -90,11 +90,12 @@ if uploaded_file:
                 marker=dict(size=10, color="blue"),
                 text=str(row['Sequence']),
                 textposition="top center",
-                name="Origin" if not legend_added["Origin"] else None,
+                name="Origin" if show_legend["Origin"] else None,
                 hoverinfo="text",
-                hovertext=f"Origin: {row['LEGO_ZONE_DESC']}"
+                hovertext=f"Origin: {row['LEGO_ZONE_DESC']}",
+                showlegend=show_legend["Origin"]
             ))
-            legend_added["Origin"] = True
+            show_legend["Origin"] = False
             
             # Add markers for destination
             fig.add_trace(go.Scattergeo(
@@ -104,11 +105,12 @@ if uploaded_file:
                 marker=dict(size=10, color="red"),
                 text=str(row['Sequence'] + 1),
                 textposition="top center",
-                name="Destination" if not legend_added["Destination"] else None,
+                name="Destination" if show_legend["Destination"] else None,
                 hoverinfo="text",
-                hovertext=f"Destination: {row['LEGD_ZONE_DESC']}"
+                hovertext=f"Destination: {row['LEGD_ZONE_DESC']}",
+                showlegend=show_legend["Destination"]
             ))
-            legend_added["Destination"] = True
+            show_legend["Destination"] = False
             
             # Add route line
             fig.add_trace(go.Scattergeo(
@@ -116,10 +118,11 @@ if uploaded_file:
                 lat=[row['LEGO_LAT'], row['LEGD_LAT']],
                 mode="lines",
                 line=dict(width=2, color="green"),
-                name="Route" if not legend_added["Route"] else None,
-                hoverinfo="none"
+                name="Route" if show_legend["Route"] else None,
+                hoverinfo="none",
+                showlegend=show_legend["Route"]
             ))
-            legend_added["Route"] = True
+            show_legend["Route"] = False
         
         fig.update_layout(
             title="Movement Map",
@@ -142,8 +145,6 @@ if uploaded_file:
         if row.name > 0 and details_df.iloc[row.name]['Day'] == details_df.iloc[row.name - 1]['Day']:
             return [highlight_color] * len(row)
         return [""] * len(row)
-    
-    styled_table = details_df.style.apply(highlight_same_day, axis=1)
     
     st.dataframe(details_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
