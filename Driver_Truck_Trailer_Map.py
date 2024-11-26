@@ -76,6 +76,9 @@ if uploaded_file:
     # Add sequence numbers for map points
     filtered_df["Sequence"] = range(1, len(filtered_df) * 2 + 1, 2)
     
+    # Add Day column
+    filtered_df['Day'] = pd.to_datetime(filtered_df['INS_TIMESTAMP']).dt.date
+    
     # Display the map
     if not filtered_df.empty:
         fig = go.Figure()
@@ -132,31 +135,25 @@ if uploaded_file:
     
     # Display data table
     st.write("Details:")
-    details_df = filtered_df.copy()
     
-    # Sort by INS_TIMESTAMP
-    details_df = details_df.sort_values(by='INS_TIMESTAMP')
-    details_df['Day'] = pd.to_datetime(details_df['INS_TIMESTAMP']).dt.date
-
-    # Highlight rows from the same day
     def highlight_rows(data):
-        # Assign alternating colors to different days
+        # Alternating color styling for rows based on the 'Day' column
         styles = []
         current_day = None
         color_cycle = ["background-color: #f0f8ff;", "background-color: #fffacd;"]
         color_index = 0
-        for _, row in data.iterrows():
+        for idx, row in data.iterrows():
             if row['Day'] != current_day:
                 current_day = row['Day']
                 color_index = (color_index + 1) % 2
-            styles.append(color_cycle[color_index])
-        return pd.DataFrame([styles] * len(data.columns), columns=data.columns, index=data.index).transpose()
+            styles.append([color_cycle[color_index]] * len(data.columns))
+        return pd.DataFrame(styles, columns=data.columns, index=data.index)
 
-    styled_table = details_df.style.apply(highlight_rows, axis=None)
+    styled_table = filtered_df.style.apply(highlight_rows, axis=1)
     
-    st.dataframe(details_df[[
+    st.dataframe(filtered_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
         "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_rows, axis=None))
+    ]].style.apply(highlight_rows, axis=1))
 else:
     st.info("Please upload a file to proceed.")
