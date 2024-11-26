@@ -104,9 +104,6 @@ if uploaded_file:
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=row['LEGD_ZONE_DESC'],
-                showlegend
-python
-Copy code
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
@@ -143,22 +140,16 @@ Copy code
     def highlight_same_day(dataframe):
         styles = []
         prev_day = None
-        for i, day in enumerate(dataframe['Day']):
+        colors = ["background-color: #ffffcc", "background-color: #ccffff"]
+        color_index = 0
+        for day in dataframe['Day']:
             if day != prev_day:
-                color = f"background-color: #{i % 2 * 99 + 33}ffcc;"
-            styles.append([color] * len(dataframe.columns))
-            prev_day = day
-        return styles
+                color_index = (color_index + 1) % 2
+                prev_day = day
+            styles.append([colors[color_index]] * len(dataframe.columns))
+        return pd.DataFrame(styles, index=dataframe.index, columns=dataframe.columns)
 
-    styled_table = filtered_df.style.apply(highlight_same_day, axis=1)
-    st.dataframe(filtered_df[[
-        "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
-        "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_same_day, axis=1))
-else:
-    st.info("Please upload a file to proceed.")
-
-    
+    styled_table = filtered_df.style.apply(highlight_same_day, axis=None)
     st.dataframe(styled_table)
 else:
     st.info("Please upload a file to proceed.")
