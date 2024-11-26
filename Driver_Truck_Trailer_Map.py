@@ -14,18 +14,18 @@ SELECT LS_DRIVER, LS_POWER_UNIT, LS_TRAILER1, LEGO_ZONE_DESC, LEGD_ZONE_DESC, LS
 
 Replace `X` and `Y` with the desired date range.
 
-2. Save the query results as an Excel file with the sheet name `attachment`.
+2. Save the query results a csv file.
 
 3. Upload the file below to visualize the data.
 
 """)
 
 # File upload
-uploaded_file = st.file_uploader("Upload the LEGSUM Excel file:", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload the LEGSUM CSV file:", type=["csv"])
 if uploaded_file:
     # Load uploaded data
     try:
-        df = pd.read_excel(uploaded_file, sheet_name="attachment")
+        df = pd.read_csv(uploaded_file)
     except Exception as e:
         st.error(f"Failed to load the uploaded file: {e}")
         st.stop()
