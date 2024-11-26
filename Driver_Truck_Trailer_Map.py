@@ -133,22 +133,26 @@ if uploaded_file:
     else:
         st.warning("No data available for the selected filters.")
     
-    # Display data table
+    # Display data table with alternating day highlights
     st.write("Details:")
     details_df = filtered_df.copy()
-    
-    # Highlight rows from the same day
     details_df['Day'] = pd.to_datetime(details_df['INS_TIMESTAMP']).dt.date
     details_df = details_df.sort_values(by=['INS_TIMESTAMP'])
-    
-    def highlight_same_day(row, highlight_color="background-color: #ffffcc"):
-        if row.name > 0 and details_df.iloc[row.name]['Day'] == details_df.iloc[row.name - 1]['Day']:
-            return [highlight_color] * len(row)
-        return [""] * len(row)
-    
-    st.dataframe(details_df[[
+
+    # Highlight rows for the same day with alternating colors
+    unique_days = details_df['Day'].unique()
+    def highlight_by_day(row, alternating_colors=("background-color: #ffffcc", "background-color: #ccffff")):
+        day = row['Day']
+        color_index = list(unique_days).index(day) % len(alternating_colors)
+        color = alternating_colors[color_index]
+        return [color] * len(row)
+
+    # Apply styling
+    styled_table = details_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
         "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_same_day, axis=1))
+    ]].style.apply(highlight_by_day, axis=1)
+
+    st.dataframe(styled_table)
 else:
     st.info("Please upload a file to proceed.")
