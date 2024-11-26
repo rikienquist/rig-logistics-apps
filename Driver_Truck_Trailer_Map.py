@@ -9,10 +9,13 @@ st.title("Driver, Truck and Trailer Movement Map")
 st.markdown("""
 **Instructions**:
 1. Use the following query to generate the required LEGSUM data:
+
 SELECT LS_DRIVER, LS_POWER_UNIT, LS_TRAILER1, LEGO_ZONE_DESC, LEGD_ZONE_DESC, LS_TO_ZONE, LS_LEG_DIST, LS_MT_LOADED, LS_TO_ZONE, LS_FREIGHT, INS_TIMESTAMP, LS_LEG_NOTE FROM LEGSUM WHERE "INS_TIMESTAMP" BETWEEN 'X' AND 'Y';
+
 Replace `X` and `Y` with the desired date range.
 
 2. Save the query results as an Excel file with the sheet name `attachment`.
+
 3. Upload the file below to visualize the data.
 
 """)
