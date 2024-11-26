@@ -50,57 +50,39 @@ if uploaded_file:
         how="left"
     )
 
-    # Ensure columns used for filters are treated as strings
-    df['LS_POWER_UNIT'] = df['LS_POWER_UNIT'].astype(str)
-    df['LS_DRIVER'] = df['LS_DRIVER'].astype(str)
-    df['LS_TRAILER1'] = df['LS_TRAILER1'].astype(str)
-
-    # Sidebar Filters with Dynamic Options
+    # Sidebar Filters
     st.sidebar.header("Filters")
 
-    # Truck Unit filter
-    truck_options = sorted(df['LS_POWER_UNIT'].dropna().unique())
-    selected_truck = st.sidebar.selectbox("Select Truck Unit:", ["None"] + list(truck_options))
-
-    # Update Driver ID options based on Truck Unit selection
+    # Initial filter options
+    selected_truck = st.sidebar.selectbox("Select Truck Unit:", ["None"] + sorted(df["LS_POWER_UNIT"].dropna().unique()))
     if selected_truck != "None":
-        relevant_drivers = df[df['LS_POWER_UNIT'] == selected_truck]['LS_DRIVER'].dropna().unique()
-        relevant_trailers = df[df['LS_POWER_UNIT'] == selected_truck]['LS_TRAILER1'].dropna().unique()
+        relevant_drivers = df[df["LS_POWER_UNIT"] == selected_truck]["LS_DRIVER"].dropna().unique()
+        relevant_trailers = df[df["LS_POWER_UNIT"] == selected_truck]["LS_TRAILER1"].dropna().unique()
     else:
-        relevant_drivers = []
-        relevant_trailers = []
+        relevant_drivers = df["LS_DRIVER"].dropna().unique()
+        relevant_trailers = df["LS_TRAILER1"].dropna().unique()
 
-    # Driver ID filter
     selected_driver = st.sidebar.selectbox(
-        "Select Driver ID:", 
-        ["None"] + sorted(relevant_drivers) if selected_truck != "None" else ["None"]
+        "Select Driver ID:", ["None"] + ["All"] + sorted(relevant_drivers)
     )
-
-    # Update Trailer Unit options based on Truck Unit and Driver ID selection
-    if selected_driver != "None" and selected_truck != "None":
-        relevant_trailers = df[(df['LS_POWER_UNIT'] == selected_truck) & (df['LS_DRIVER'] == selected_driver)]['LS_TRAILER1'].dropna().unique()
-
-    # Trailer Unit filter
     selected_trailer = st.sidebar.selectbox(
-        "Select Trailer Unit:", 
-        ["None"] + sorted(relevant_trailers) if selected_truck != "None" else ["None"]
+        "Select Trailer Unit:", ["None"] + ["All"] + sorted(relevant_trailers)
     )
 
     # Apply filters
     filtered_df = df.copy()
     if selected_truck != "None":
         filtered_df = filtered_df[filtered_df["LS_POWER_UNIT"] == selected_truck]
-    if selected_driver != "None":
+    if selected_driver != "None" and selected_driver != "All":
         filtered_df = filtered_df[filtered_df["LS_DRIVER"] == selected_driver]
-    if selected_trailer != "None":
+    if selected_trailer != "None" and selected_trailer != "All":
         filtered_df = filtered_df[filtered_df["LS_TRAILER1"] == selected_trailer]
 
-    # Map and Table Visualization
-    if not filtered_df.empty:
-        # Sort by INS_TIMESTAMP
-        filtered_df = filtered_df.sort_values(by="INS_TIMESTAMP").reset_index(drop=True)
+    # Sort by INS_TIMESTAMP
+    filtered_df = filtered_df.sort_values(by="INS_TIMESTAMP").reset_index(drop=True)
 
-        # Map Visualization
+    # Map Visualization
+    if not filtered_df.empty:
         fig = go.Figure()
         legend_added = {"Origin": False, "Destination": False, "Route": False}
         sequence_counter = 1
@@ -155,15 +137,31 @@ if uploaded_file:
         )
 
         st.plotly_chart(fig)
-
-        # Details Table
-        st.write("Details:")
-        filtered_df['INS_TIMESTAMP'] = pd.to_datetime(filtered_df['INS_TIMESTAMP'])
-        st.dataframe(filtered_df[[
-            "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
-            "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-        ]])
     else:
         st.warning("No data available for the selected filters.")
+
+    # Details Table
+    st.write("Details:")
+    filtered_df['INS_TIMESTAMP'] = pd.to_datetime(filtered_df['INS_TIMESTAMP'])
+    filtered_df['Day'] = filtered_df['INS_TIMESTAMP'].dt.date
+
+    # Highlight rows by day
+    def highlight_same_day(dataframe):
+        styles = []
+        prev_day = None
+        colors = ["background-color: #ffffcc", "background-color: #ccffff"]
+        color_index = 0
+        for day in dataframe['Day']:
+            if day != prev_day:
+                color_index = (color_index + 1) % 2
+                prev_day = day
+            styles.append([colors[color_index]] * len(dataframe.columns))
+        return pd.DataFrame(styles, index=dataframe.index, columns=dataframe.columns)
+
+    styled_table = filtered_df.style.apply(highlight_same_day, axis=None)
+    st.dataframe(filtered_df[[
+        "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
+        "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
+    ]].style.apply(highlight_same_day, axis=None))
 else:
     st.info("Please upload a file to proceed.")
