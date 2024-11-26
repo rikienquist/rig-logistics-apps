@@ -146,14 +146,14 @@ if uploaded_file:
             if row['Day'] != current_day:
                 current_day = row['Day']
                 color_index = (color_index + 1) % 2
-            styles.append([color_cycle[color_index]] * len(data.columns))
-        return pd.DataFrame(styles, columns=data.columns, index=data.index)
+            styles.append(color_cycle[color_index])
+        return pd.DataFrame(styles, index=data.index, columns=data.columns)
 
-    styled_table = filtered_df.style.apply(highlight_rows, axis=1)
+    styled_table = filtered_df.style.apply(highlight_rows, axis=None)
     
     st.dataframe(filtered_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
         "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_rows, axis=1))
+    ]].style.apply(highlight_rows, axis=None))
 else:
     st.info("Please upload a file to proceed.")
