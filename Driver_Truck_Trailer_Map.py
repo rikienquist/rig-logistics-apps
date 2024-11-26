@@ -76,9 +76,6 @@ if uploaded_file:
     # Add sequence numbers for map points
     filtered_df["Sequence"] = range(1, len(filtered_df) * 2 + 1, 2)
     
-    # Add Day column
-    filtered_df['Day'] = pd.to_datetime(filtered_df['INS_TIMESTAMP']).dt.date
-    
     # Display the map
     if not filtered_df.empty:
         fig = go.Figure()
@@ -135,25 +132,22 @@ if uploaded_file:
     
     # Display data table
     st.write("Details:")
+    details_df = filtered_df.copy()
     
-    def highlight_rows(data):
-        # Alternating color styling for rows based on the 'Day' column
-        styles = []
-        current_day = None
-        color_cycle = ["background-color: #f0f8ff;", "background-color: #fffacd;"]
-        color_index = 0
-        for idx, row in data.iterrows():
-            if row['Day'] != current_day:
-                current_day = row['Day']
-                color_index = (color_index + 1) % 2
-            styles.append(color_cycle[color_index])
-        return pd.DataFrame(styles, index=data.index, columns=data.columns)
-
-    styled_table = filtered_df.style.apply(highlight_rows, axis=None)
+    # Highlight rows from the same day
+    details_df['Day'] = pd.to_datetime(details_df['INS_TIMESTAMP']).dt.date
+    details_df = details_df.sort_values(by=['INS_TIMESTAMP'])
     
-    st.dataframe(filtered_df[[
+    def highlight_same_day(row, highlight_color="background-color: #ffffcc"):
+        if row.name > 0 and details_df.iloc[row.name]['Day'] == details_df.iloc[row.name - 1]['Day']:
+            return [highlight_color] * len(row)
+        return [""] * len(row)
+    
+    styled_table = details_df.style.apply(highlight_same_day, axis=1)
+    
+    st.dataframe(details_df[[
         "LS_DRIVER", "LS_POWER_UNIT", "LS_TRAILER1", "LEGO_ZONE_DESC", "LEGD_ZONE_DESC", 
         "LS_TO_ZONE", "LS_LEG_DIST", "LS_MT_LOADED", "INS_TIMESTAMP", "LS_LEG_NOTE"
-    ]].style.apply(highlight_rows, axis=None))
+    ]].style.apply(highlight_same_day, axis=1))
 else:
     st.info("Please upload a file to proceed.")
