@@ -22,8 +22,8 @@ driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], e
 
 # Aggregate Driver Pay correctly
 driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER', as_index=False).agg({
-    'TOTAL_PAY_AMT': 'sum',
-    'DRIVER_ID': 'first'
+    'TOTAL_PAY_AMT': 'sum',  # Sum pay amounts
+    'DRIVER_ID': 'first'    # Keep the first Driver ID
 })
 
 # Preprocess city_coordinates_df for merging
@@ -156,7 +156,7 @@ if total_months > 0:
         ))
         legend_added["Origin"] = True
 
-        # Destination marker
+                # Destination marker
         fig.add_trace(go.Scattergeo(
             lon=[row['DEST_LON']],
             lat=[row['DEST_LAT']],
@@ -168,7 +168,7 @@ if total_months > 0:
             hoverinfo="text",
             hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
                        f"Date: {row['PICK_UP_DATE']}<br>"
-                                              f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                       f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                        f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
             showlegend=not legend_added["Destination"],
         ))
@@ -210,16 +210,35 @@ if total_months > 0:
             "Profit (CAD)": row['Profit'],
             "Date": row['PICK_UP_DATE']
         })
-    
+
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
+
+    # Highlight rows for same-day deliveries
+    def highlight_rows(df):
+        df['Highlight'] = (df['Date'].dt.date != df['Date'].dt.date.shift()).astype(int).cumsum() % 2
+        return df
+
+    route_summary_df = highlight_rows(route_summary_df)
+
+    # Apply alternating styles for the DataFrame
+    def apply_highlight(row):
+        if row['Highlight'] == 1:
+            return ['background-color: #f5f5f5'] * len(row)
+        else:
+            return [''] * len(row)
+
+    styled_route_summary_df = route_summary_df.style.apply(apply_highlight, axis=1)
+
+    # Drop the "Highlight" column before displaying
+    route_summary_df.drop(columns=['Highlight'], inplace=True)
 
     # Calculate grand totals
     total_charge = route_summary_df["Total Charge (CAD)"].sum()
     total_distance = route_summary_df["Distance (miles)"].sum()
     total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
     total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
-    total_profit = total_charge - total_driver_pay  # Correctly calculate total profit
+    total_profit = route_summary_df["Profit (CAD)"].sum()
     grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
 
     # Add grand totals row
@@ -249,4 +268,3 @@ if total_months > 0:
 
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
-
