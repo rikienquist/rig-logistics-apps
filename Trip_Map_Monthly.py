@@ -43,20 +43,9 @@ tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
                         (pd.notna(tlorder_df['ORIG_LAT'])) & 
                         (pd.notna(tlorder_df['DEST_LAT']))].copy()
 
-# Ensure TOTAL_PAY_AMT is numeric and properly summed
-driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], errors='coerce').fillna(0)
-
-# Aggregate driver pay properly
-driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({
-    'TOTAL_PAY_AMT': 'sum',  # Proper summation of pay amounts
-    'DRIVER_ID': 'first'  # Assuming one DRIVER_ID per BILL_NUMBER
-}).reset_index()
-
+# Merge with driver pay
+driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
-
-# Ensure CHARGES and XCHARGES columns are numeric
-tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce').fillna(0)
-tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce').fillna(0)
 
 # Calculate CAD charge and filter
 tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
@@ -70,7 +59,9 @@ filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("
 
 # Calculate Revenue per Mile and Profit
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-filtered_df['Profit'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
+
+# Recalculate Profit to avoid any errors
+filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
 # Add Month Column for Grouping
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
@@ -182,7 +173,7 @@ if total_months > 0:
             lon=[row['ORIG_LON'], row['DEST_LON']],
             lat=[row['ORIG_LAT'], row['DEST_LAT']],
             mode="lines",
-            line=dict(width=2, color="green"),
+                        line=dict(width=2, color="green"),
             name="Route" if not legend_added["Route"] else None,
             hoverinfo="skip",
             showlegend=not legend_added["Route"],
@@ -210,7 +201,7 @@ if total_months > 0:
             "Revenue per Mile": row['Revenue per Mile'],
             "Driver ID": row['DRIVER_ID'],
             "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
-            "Profit (CAD)": row['Profit'],
+            "Profit (CAD)": row['Profit (CAD)'],
             "Date": row['PICK_UP_DATE']
         })
     
@@ -222,7 +213,7 @@ if total_months > 0:
     total_distance = route_summary_df["Distance (miles)"].sum()
     total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
     total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
-    total_profit = route_summary_df["Profit (CAD)"].sum()
+    total_profit = total_charge - total_driver_pay
     grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
 
     # Add grand totals row
@@ -252,3 +243,4 @@ if total_months > 0:
 
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
+
