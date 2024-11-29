@@ -17,15 +17,6 @@ data_folder = "trip_map_data"
 tlorder_df = pd.read_csv(os.path.join(data_folder, "TLORDER_09-01-2022_11-29-2024.csv"), low_memory=False)
 driver_pay_df = pd.read_csv(os.path.join(data_folder, "DRIVERPAY_09-01-2022_11-29-2024.csv"), low_memory=False)
 
-# Ensure TOTAL_PAY_AMT is numeric
-driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], errors='coerce')
-
-# Aggregate Driver Pay correctly
-driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER', as_index=False).agg({
-    'TOTAL_PAY_AMT': 'sum',  # Sum pay amounts
-    'DRIVER_ID': 'first'    # Keep the first Driver ID
-})
-
 # Preprocess city_coordinates_df for merging
 city_coordinates_df.rename(columns={
     "city": "ORIGCITY",
@@ -53,6 +44,7 @@ tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
                         (pd.notna(tlorder_df['DEST_LAT']))].copy()
 
 # Merge with driver pay
+driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
 # Calculate CAD charge and filter
@@ -134,7 +126,74 @@ if total_months > 0:
     fig = go.Figure()
     month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
 
-    # Add map traces
+    # Highlight rows based on alternating days
+    def highlight_rows(df):
+        df['Highlight'] = (df['PICK_UP_DATE'].dt.date != df['PICK_UP_DATE'].dt.date.shift()).astype(int).cumsum() % 2
+        return df
+
+    month_data = highlight_rows(month_data)
+
+    # Alternating row colors
+    def apply_highlight(row):
+        if row['Highlight'] == 1:
+            return ['background-color: #f0f8ff'] * len(row)  # Light blue
+        else:
+            return [''] * len(row)
+
+    # Prepare route summary table
+    route_summary = []
+    for _, row in month_data.iterrows():
+        route_summary.append({
+            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
+            "BILL_NUMBER": row['BILL_NUMBER'],
+            "Total Charge (CAD)": row['TOTAL_CHARGE_CAD'],
+            "Distance (miles)": row['DISTANCE'],
+            "Straight Distance (miles)": row['Straight Distance'],
+            "Revenue per Mile": row['Revenue per Mile'],
+            "Driver ID": row['DRIVER_ID'],
+            "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
+            "Profit (CAD)": row['Profit'],
+            "Date": row['PICK_UP_DATE']
+        })
+    route_summary_df = pd.DataFrame(route_summary)
+
+    # Add grand totals row
+    total_charge = route_summary_df["Total Charge (CAD)"].sum()
+    total_distance = route_summary_df["Distance (miles)"].sum()
+    total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
+    total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
+    total_profit = total_charge - total_driver_pay
+    grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
+
+    grand_totals = {
+        "Route": "Grand Totals",
+        "BILL_NUMBER": "",
+        "Total Charge (CAD)": total_charge,
+        "Distance (miles)": total_distance,
+        "Straight Distance (miles)": total_straight_distance,
+        "Revenue per Mile": grand_revenue_per_mile,
+        "Driver ID": "",
+        "Driver Pay (CAD)": total_driver_pay,
+        "Profit (CAD)": total_profit,
+        "Date": ""
+    }
+    route_summary_df = pd.concat([route_summary_df, pd.DataFrame([grand_totals])], ignore_index=True)
+
+        # Format currency columns
+    for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
+        route_summary_df[col] = route_summary_df[col].apply(
+            lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+        )
+
+    # Display the route summary table with highlights
+    st.write("Route Summary:")
+
+    styled_df = route_summary_df.style.apply(
+        lambda x: apply_highlight(x) if "Highlight" in x else [''] * len(x), axis=1
+    )
+    st.dataframe(styled_df, use_container_width=True)
+
+    # Generate the map
     label_counter = 1
     legend_added = {"Origin": False, "Destination": False, "Route": False}
     for _, row in month_data.iterrows():
@@ -156,7 +215,7 @@ if total_months > 0:
         ))
         legend_added["Origin"] = True
 
-                # Destination marker
+        # Destination marker
         fig.add_trace(go.Scattergeo(
             lon=[row['DEST_LON']],
             lat=[row['DEST_LAT']],
@@ -195,76 +254,7 @@ if total_months > 0:
     )
     st.plotly_chart(fig)
 
-    # Create the route summary table
-    route_summary = []
-    for _, row in month_data.iterrows():
-        route_summary.append({
-            "Route": f"{row['ORIGCITY']}, {row['ORIGPROV']} to {row['DESTCITY']}, {row['DESTPROV']}",
-            "BILL_NUMBER": row['BILL_NUMBER'],
-            "Total Charge (CAD)": row['TOTAL_CHARGE_CAD'],
-            "Distance (miles)": row['DISTANCE'],
-            "Straight Distance (miles)": row['Straight Distance'],
-            "Revenue per Mile": row['Revenue per Mile'],
-            "Driver ID": row['DRIVER_ID'],
-            "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
-            "Profit (CAD)": row['Profit'],
-            "Date": row['PICK_UP_DATE']
-        })
-
-    # Convert the route summary to a DataFrame
-    route_summary_df = pd.DataFrame(route_summary)
-
-    # Highlight rows for same-day deliveries
-    def highlight_rows(df):
-        df['Highlight'] = (df['Date'].dt.date != df['Date'].dt.date.shift()).astype(int).cumsum() % 2
-        return df
-
-    route_summary_df = highlight_rows(route_summary_df)
-
-    # Apply alternating styles for the DataFrame
-    def apply_highlight(row):
-        if row['Highlight'] == 1:
-            return ['background-color: #f5f5f5'] * len(row)
-        else:
-            return [''] * len(row)
-
-    styled_route_summary_df = route_summary_df.style.apply(apply_highlight, axis=1)
-
-    # Drop the "Highlight" column before displaying
-    route_summary_df.drop(columns=['Highlight'], inplace=True)
-
-    # Calculate grand totals
-    total_charge = route_summary_df["Total Charge (CAD)"].sum()
-    total_distance = route_summary_df["Distance (miles)"].sum()
-    total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
-    total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
-    total_profit = route_summary_df["Profit (CAD)"].sum()
-    grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
-
-    # Add grand totals row
-    grand_totals = {
-        "Route": "Grand Totals",
-        "BILL_NUMBER": "",
-        "Total Charge (CAD)": total_charge,
-        "Distance (miles)": total_distance,
-        "Straight Distance (miles)": total_straight_distance,
-        "Revenue per Mile": grand_revenue_per_mile,
-        "Driver ID": "",
-        "Driver Pay (CAD)": total_driver_pay,
-        "Profit (CAD)": total_profit,
-        "Date": ""
-    }
-
-    # Add grand totals to DataFrame
-    route_summary_df = pd.concat([route_summary_df, pd.DataFrame([grand_totals])], ignore_index=True)
-
-    # Format currency columns
-    for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
-        route_summary_df[col] = route_summary_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
-
-    # Display the route summary table
-    st.write("Route Summary:")
-    st.dataframe(route_summary_df, use_container_width=True)
-
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
+
+    
