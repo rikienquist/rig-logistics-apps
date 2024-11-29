@@ -57,11 +57,8 @@ filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DI
 # Ensure PICK_UP_PUNIT is clean
 filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
 
-# Calculate Revenue per Mile and Profit
+# Calculate Revenue per Mile
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-
-# Recalculate Profit to avoid any errors
-filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
 # Add Month Column for Grouping
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
@@ -81,6 +78,10 @@ filtered_df['Straight Distance'] = haversine(
     filtered_df['ORIG_LAT'], filtered_df['ORIG_LON'],
     filtered_df['DEST_LAT'], filtered_df['DEST_LON']
 )
+
+# Ensure numeric types for arithmetic
+filtered_df['TOTAL_CHARGE_CAD'] = pd.to_numeric(filtered_df['TOTAL_CHARGE_CAD'], errors='coerce')
+filtered_df['TOTAL_PAY_AMT'] = pd.to_numeric(filtered_df['TOTAL_PAY_AMT'], errors='coerce')
 
 # Streamlit App
 st.title("Trip Map Viewer by Month")
@@ -173,8 +174,8 @@ if total_months > 0:
             lon=[row['ORIG_LON'], row['DEST_LON']],
             lat=[row['ORIG_LAT'], row['DEST_LAT']],
             mode="lines",
-                        line=dict(width=2, color="green"),
-            name="Route" if not legend_added["Route"] else None,
+            line=dict(width=2, color="green"),
+                        name="Route" if not legend_added["Route"] else None,
             hoverinfo="skip",
             showlegend=not legend_added["Route"],
         ))
@@ -201,10 +202,10 @@ if total_months > 0:
             "Revenue per Mile": row['Revenue per Mile'],
             "Driver ID": row['DRIVER_ID'],
             "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
-            "Profit (CAD)": row['Profit (CAD)'],
+            "Profit (CAD)": row['TOTAL_CHARGE_CAD'] - row['TOTAL_PAY_AMT'],  # Ensure profit is recalculated row-wise
             "Date": row['PICK_UP_DATE']
         })
-    
+
     # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
@@ -213,7 +214,7 @@ if total_months > 0:
     total_distance = route_summary_df["Distance (miles)"].sum()
     total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
     total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
-    total_profit = total_charge - total_driver_pay
+    total_profit = total_charge - total_driver_pay  # Recalculate profit for grand totals
     grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
 
     # Add grand totals row
