@@ -43,12 +43,18 @@ tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
                         (pd.notna(tlorder_df['ORIG_LAT'])) & 
                         (pd.notna(tlorder_df['DEST_LAT']))].copy()
 
-# Merge with driver pay
-driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
+# Ensure TOTAL_PAY_AMT is numeric and properly summed
+driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], errors='coerce').fillna(0)
+
+# Aggregate driver pay properly
+driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({
+    'TOTAL_PAY_AMT': 'sum',  # Proper summation of pay amounts
+    'DRIVER_ID': 'first'  # Assuming one DRIVER_ID per BILL_NUMBER
+}).reset_index()
+
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-# Ensure TOTAL_PAY_AMT and CHARGES columns are numeric
-tlorder_df['TOTAL_PAY_AMT'] = pd.to_numeric(tlorder_df['TOTAL_PAY_AMT'], errors='coerce').fillna(0)
+# Ensure CHARGES and XCHARGES columns are numeric
 tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce').fillna(0)
 tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce').fillna(0)
 
