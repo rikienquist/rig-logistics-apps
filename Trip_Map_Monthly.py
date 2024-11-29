@@ -47,6 +47,11 @@ tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
 driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
+# Ensure TOTAL_PAY_AMT and CHARGES columns are numeric
+tlorder_df['TOTAL_PAY_AMT'] = pd.to_numeric(tlorder_df['TOTAL_PAY_AMT'], errors='coerce').fillna(0)
+tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce').fillna(0)
+tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce').fillna(0)
+
 # Calculate CAD charge and filter
 tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
     lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
