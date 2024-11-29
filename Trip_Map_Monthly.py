@@ -39,17 +39,21 @@ city_coordinates_df.rename(columns={
 tlorder_df = tlorder_df.merge(city_coordinates_df, on=["DESTCITY", "DESTPROV"], how="left")
 
 # Filter for non-same-city routes and rows with valid coordinates
-tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) & 
-                        (pd.notna(tlorder_df['ORIG_LAT'])) & 
+tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
+                        (pd.notna(tlorder_df['ORIG_LAT'])) &
                         (pd.notna(tlorder_df['DEST_LAT']))].copy()
 
 # Merge with driver pay
-driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER').agg({'TOTAL_PAY_AMT': 'sum', 'DRIVER_ID': 'first'})
+driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], errors='coerce')
+driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER')['TOTAL_PAY_AMT'].sum().reset_index()
+driver_pay_agg['DRIVER_ID'] = driver_pay_df.groupby('BILL_NUMBER')['DRIVER_ID'].first().reset_index(drop=True)
 tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
 # Calculate CAD charge and filter
+tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce')
+tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce')
 tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
-    lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'], 
+    lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'],
     axis=1
 )
 filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)].copy()
@@ -59,7 +63,7 @@ filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("
 
 # Calculate Revenue per Mile and Profit
 filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-filtered_df['Profit'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
+filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
 # Add Month Column for Grouping
 filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
@@ -122,25 +126,10 @@ if total_months > 0:
     st.write(f"Viewing data for month: {selected_month}")
     month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
-    # Generate map
-    fig = go.Figure()
-    month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
+    # Highlight alternate days
+    month_data['Highlight'] = (month_data['PICK_UP_DATE'].dt.date != month_data['PICK_UP_DATE'].dt.date.shift()).cumsum() % 2
 
-    # Highlight rows based on alternating days
-    def highlight_rows(df):
-        df['Highlight'] = (df['PICK_UP_DATE'].dt.date != df['PICK_UP_DATE'].dt.date.shift()).astype(int).cumsum() % 2
-        return df
-
-    month_data = highlight_rows(month_data)
-
-    # Alternating row colors
-    def apply_highlight(row):
-        if row['Highlight'] == 1:
-            return ['background-color: #f0f8ff'] * len(row)  # Light blue
-        else:
-            return [''] * len(row)
-
-    # Prepare route summary table
+    # Create the route summary table
     route_summary = []
     for _, row in month_data.iterrows():
         route_summary.append({
@@ -152,12 +141,14 @@ if total_months > 0:
             "Revenue per Mile": row['Revenue per Mile'],
             "Driver ID": row['DRIVER_ID'],
             "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
-            "Profit (CAD)": row['Profit'],
+            "Profit (CAD)": row['TOTAL_CHARGE_CAD'] - row['TOTAL_PAY_AMT'],
             "Date": row['PICK_UP_DATE']
         })
+
+    # Convert the route summary to a DataFrame
     route_summary_df = pd.DataFrame(route_summary)
 
-    # Add grand totals row
+    # Calculate grand totals
     total_charge = route_summary_df["Total Charge (CAD)"].sum()
     total_distance = route_summary_df["Distance (miles)"].sum()
     total_straight_distance = route_summary_df["Straight Distance (miles)"].sum()
@@ -165,6 +156,7 @@ if total_months > 0:
     total_profit = total_charge - total_driver_pay
     grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
 
+    # Add grand totals row
     grand_totals = {
         "Route": "Grand Totals",
         "BILL_NUMBER": "",
@@ -176,28 +168,39 @@ if total_months > 0:
         "Driver Pay (CAD)": total_driver_pay,
         "Profit (CAD)": total_profit,
         "Date": ""
-    }
+            }
+
+    # Append grand totals to DataFrame
     route_summary_df = pd.concat([route_summary_df, pd.DataFrame([grand_totals])], ignore_index=True)
 
-        # Format currency columns
+    # Format currency columns
     for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
         route_summary_df[col] = route_summary_df[col].apply(
             lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
         )
 
-    # Display the route summary table with highlights
-    st.write("Route Summary:")
+    # Highlight rows for alternate days
+    def highlight_rows(row):
+        if row['Route'] == "Grand Totals":
+            return ['background-color: #f7c8c8'] * len(row)
+        elif row['Date'] != "":
+            date_highlight = month_data.loc[month_data['PICK_UP_DATE'] == row['Date'], 'Highlight'].iloc[0]
+            return ['background-color: #c8e0f7' if date_highlight == 1 else 'background-color: #f7f7c8'] * len(row)
+        else:
+            return ['background-color: white'] * len(row)
 
-    styled_df = route_summary_df.style.apply(
-        lambda x: apply_highlight(x) if "Highlight" in x else [''] * len(x), axis=1
-    )
-    st.dataframe(styled_df, use_container_width=True)
+    # Apply styling and display the DataFrame
+    styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
+    st.write("Route Summary:")
+    st.dataframe(styled_route_summary, use_container_width=True)
 
     # Generate the map
+    fig = go.Figure()
+    month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
     label_counter = 1
     legend_added = {"Origin": False, "Destination": False, "Route": False}
     for _, row in month_data.iterrows():
-        # Origin marker
+        # Add origin marker
         fig.add_trace(go.Scattergeo(
             lon=[row['ORIG_LON']],
             lat=[row['ORIG_LAT']],
@@ -211,11 +214,11 @@ if total_months > 0:
                        f"Date: {row['PICK_UP_DATE']}<br>"
                        f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                        f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
-            showlegend=not legend_added["Origin"],
+            showlegend=not legend_added["Origin"]
         ))
         legend_added["Origin"] = True
 
-        # Destination marker
+        # Add destination marker
         fig.add_trace(go.Scattergeo(
             lon=[row['DEST_LON']],
             lat=[row['DEST_LAT']],
@@ -229,11 +232,11 @@ if total_months > 0:
                        f"Date: {row['PICK_UP_DATE']}<br>"
                        f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                        f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
-            showlegend=not legend_added["Destination"],
+            showlegend=not legend_added["Destination"]
         ))
         legend_added["Destination"] = True
 
-        # Route line
+        # Add route line
         fig.add_trace(go.Scattergeo(
             lon=[row['ORIG_LON'], row['DEST_LON']],
             lat=[row['ORIG_LAT'], row['DEST_LAT']],
@@ -241,7 +244,7 @@ if total_months > 0:
             line=dict(width=2, color="green"),
             name="Route" if not legend_added["Route"] else None,
             hoverinfo="skip",
-            showlegend=not legend_added["Route"],
+            showlegend=not legend_added["Route"]
         ))
         legend_added["Route"] = True
 
@@ -256,5 +259,3 @@ if total_months > 0:
 
 else:
     st.warning("No data available for the selected PUNIT and Driver ID.")
-
-    
