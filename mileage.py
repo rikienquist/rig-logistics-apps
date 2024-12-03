@@ -19,8 +19,14 @@ else:
     st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
 
-# Filter the relevant date columns
-date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31', 'NOV 1-30']
+# Automatically detect date-related columns and ensure they are the newest (furthest right)
+date_columns = [
+    col for col in trailer_data.columns 
+    if any(month.lower() in col.lower() for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])
+]
+date_columns = [col for col in date_columns if '1-31' in col or '1-30' in col or '1-29' in col]  # To filter valid date ranges
+date_columns = sorted(date_columns, key=lambda x: trailer_data.columns.get_loc(x))  # Sort columns based on their position
+selected_date_column = st.selectbox("Select Date Column", date_columns)
 
 # Function to create the Target % based on the provided logic
 def calculate_target_percentage(row, date_column):
@@ -30,9 +36,6 @@ def calculate_target_percentage(row, date_column):
         return (row[date_column] / 20000) * 100
     else:
         return None
-
-# Select Date Column dynamically
-selected_date_column = st.selectbox("Select Date Column", date_columns)
 
 # Dynamically reset and recalculate Target % and Target Achieved based on the selected column
 def recalculate_metrics(data, date_column):
