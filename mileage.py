@@ -18,6 +18,10 @@ if uploaded_file:
     # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty, or 'Wide' or 'Terminal' is 'Texas'
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
+
+    # Ensure 'Planner Name' is treated as a string and handle NaN values
+    trailer_data['Planner Name'] = trailer_data['Planner Name'].fillna("").astype(str).str.strip().str.title()
+
 else:
     st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
