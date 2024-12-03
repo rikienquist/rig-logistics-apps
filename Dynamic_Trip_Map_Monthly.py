@@ -86,9 +86,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
     filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
-    # Add Month Column for Grouping
-    filtered_df['PICK_UP_DATE'] = pd.to_datetime(filtered_df['PICK_UP_BY'])
-    filtered_df['Month'] = filtered_df['PICK_UP_DATE'].dt.to_period('M')
+    # Add a new column for dynamic date selection
+    cutoff_date = pd.Timestamp("2024-10-01")
+    filtered_df['Effective_Date'] = filtered_df.apply(
+        lambda row: row['DELIVER_BY'] if pd.to_datetime(row['PICK_UP_BY']) >= cutoff_date else row['PICK_UP_BY'], axis=1
+    )
+
+    # Ensure the effective date is in datetime format
+    filtered_df['Effective_Date'] = pd.to_datetime(filtered_df['Effective_Date'], errors='coerce')
+    filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
 
     # Calculate Straight Distance using Haversine formula
     def haversine(lat1, lon1, lat2, lon2):
@@ -223,7 +229,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Date: {row['Effective_Date']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
@@ -244,7 +250,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                           f"Date: {row['PICK_UP_DATE']}<br>"
+                           f"Date: {row['Effective_Date']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
