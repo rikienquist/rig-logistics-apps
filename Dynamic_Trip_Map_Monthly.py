@@ -225,11 +225,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
                            f"Date: {row['PICK_UP_DATE']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                           f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
+                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-
+        
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -243,11 +246,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
                            f"Date: {row['PICK_UP_DATE']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                           f"Straight Distance (miles): {row['Straight Distance']:.1f}"),
+                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-
+        
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
@@ -259,15 +265,16 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-
+        
             label_counter += 2
-
+        
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
+
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
 
