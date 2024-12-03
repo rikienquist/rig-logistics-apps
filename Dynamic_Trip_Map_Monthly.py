@@ -24,7 +24,7 @@ Use the following query to generate the required DRIVERPAY data:
 `SELECT BILL_NUMBER, PAY_ID, DRIVER_ID, PAY_DESCRIPTION, FB_TOTAL_CHARGES, CURRENCY_CODE, TOTAL_PAY_AMT, PAID_DATE, DATE_TRANS  
 FROM DRIVERPAY WHERE "PAID_DATE" BETWEEN 'X' AND 'Y';`  
 
-Replace X and Y with the desired date range.  
+Replace X and Y with the desired date range in form YYYY-MM-DD.  
 
 Save the query results as CSV files and upload them below to visualize the data.
 """)
