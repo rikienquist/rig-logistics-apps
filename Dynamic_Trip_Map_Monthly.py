@@ -145,7 +145,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
     if not month_data.empty:
         # Create the route summary and map as before
-        month_data['Highlight'] = (month_data['PICK_UP_DATE'].dt.date != month_data['PICK_UP_DATE'].dt.date.shift()).cumsum() % 2
+        month_data['Highlight'] = (month_data['Effective_Date'].dt.date != month_data['Effective_Date'].dt.date.shift()).cumsum() % 2
 
                 # Create the route summary table
         route_summary = []
@@ -160,7 +160,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 "Driver ID": row['DRIVER_ID'],
                 "Driver Pay (CAD)": row['TOTAL_PAY_AMT'],
                 "Profit (CAD)": row['TOTAL_CHARGE_CAD'] - row['TOTAL_PAY_AMT'],
-                "Date": row['PICK_UP_DATE']
+                "Date": row['Effective_Date']
             })
 
         # Convert the route summary to a DataFrame
@@ -202,7 +202,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             if row['Route'] == "Grand Totals":
                 return ['background-color: #f7c8c8'] * len(row)
             elif row['Date'] != "":
-                date_highlight = month_data.loc[month_data['PICK_UP_DATE'] == row['Date'], 'Highlight'].iloc[0]
+                date_highlight = month_data.loc[month_data['Effective_Date'] == row['Date'], 'Highlight'].iloc[0]
                 return ['background-color: #c8e0f7' if date_highlight == 1 else 'background-color: #f7f7c8'] * len(row)
             else:
                 return ['background-color: white'] * len(row)
@@ -214,7 +214,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
         # Generate the map
         fig = go.Figure()
-        month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
+        month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
         label_counter = 1
         legend_added = {"Origin": False, "Destination": False, "Route": False}
         for _, row in month_data.iterrows():
