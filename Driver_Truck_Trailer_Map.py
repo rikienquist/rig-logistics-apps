@@ -12,7 +12,7 @@ st.markdown("""
 
 SELECT LS_DRIVER, LS_POWER_UNIT, LS_TRAILER1, LEGO_ZONE_DESC, LEGD_ZONE_DESC, LS_TO_ZONE, LS_LEG_DIST, LS_MT_LOADED, LS_TO_ZONE, LS_FREIGHT, INS_TIMESTAMP, LS_LEG_NOTE FROM LEGSUM WHERE "INS_TIMESTAMP" BETWEEN 'X' AND 'Y';
 
-Replace `X` and `Y` with the desired date range.
+Replace `X` and `Y` with the desired date range in form YYYY-MM-DD.
 
 2. Save the query results a csv file.
 
