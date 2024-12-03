@@ -15,6 +15,9 @@ if uploaded_file:
     # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty, or 'Wide' or 'Terminal' is 'Texas'
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
+
+    # Ensure 'Planner Name' is consistently a string
+    trailer_data['Planner Name'] = trailer_data['Planner Name'].astype(str).str.strip().str.title()
 else:
     st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
@@ -66,9 +69,6 @@ filtered_data = recalculate_metrics(trailer_data.copy(), selected_date_column)
 
 # Remove duplicates in terminals (especially for 'Winnipeg')
 filtered_data['Terminal'] = filtered_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
-
-# Normalize Planner Name to handle case and space differences
-filtered_data['Planner Name'] = filtered_data['Planner Name'].str.strip().str.title()  # Standardize to title case
 
 # Create filters with "All" option and multiple selection enabled
 terminals = ['All'] + sorted(filtered_data['Terminal'].unique())
@@ -168,7 +168,6 @@ if not filtered_data.empty:
 
         # Reorder columns to show Average Target % at the end
         st.write("Routes Breakdown", merged_route_data)
-
 
     elif drilldown_level == 'Unit Numbers':
         selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
