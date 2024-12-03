@@ -105,9 +105,6 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         filtered_df['DEST_LAT'], filtered_df['DEST_LON']
     )
 
-    # Streamlit App
-    st.title("Trip Map Viewer by Month")
-    
     # PUNIT and Driver ID selection
     punit_options = sorted(filtered_df['PICK_UP_PUNIT'].dropna().unique())
     selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
@@ -122,35 +119,21 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     if selected_driver != "All":
         filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
     
-    # Month navigation
+    # Month dropdown for selection
     months = sorted(filtered_view['Month'].dropna().unique())
-    total_months = len(months)
+    if "selected_month" not in st.session_state:
+        st.session_state.selected_month = months[0]
+    selected_month = st.selectbox("Select Month:", options=months, index=months.index(st.session_state.selected_month))
+    st.session_state.selected_month = selected_month
     
-    def navigate_months(direction):
-        if direction == "previous" and st.session_state.month_index > 0:
-            st.session_state.month_index -= 1
-        elif direction == "next" and st.session_state.month_index < total_months - 1:
-            st.session_state.month_index += 1
-        elif direction == "back_12" and st.session_state.month_index > 11:
-            st.session_state.month_index -= 12
-        elif direction == "ahead_12" and st.session_state.month_index < total_months - 12:
-            st.session_state.month_index += 12
+    # Filter data for the selected month
+    month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.button("Previous Month", on_click=navigate_months, args=("previous",))
-    col2.button("Next Month", on_click=navigate_months, args=("next",))
-    col3.button("Back 12 Months", on_click=navigate_months, args=("back_12",))
-    col4.button("Ahead 12 Months", on_click=navigate_months, args=("ahead_12",))
-    
-    if total_months > 0:
-        selected_month = months[st.session_state.month_index]
-        st.write(f"Viewing data for month: {selected_month}")
-        month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
-    
-        # Highlight alternate days
+    if not month_data.empty:
+        # Create the route summary and map as before
         month_data['Highlight'] = (month_data['PICK_UP_DATE'].dt.date != month_data['PICK_UP_DATE'].dt.date.shift()).cumsum() % 2
-    
-        # Create the route summary table
+
+                # Create the route summary table
         route_summary = []
         for _, row in month_data.iterrows():
             route_summary.append({
@@ -165,10 +148,10 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 "Profit (CAD)": row['TOTAL_CHARGE_CAD'] - row['TOTAL_PAY_AMT'],
                 "Date": row['PICK_UP_DATE']
             })
-    
+
         # Convert the route summary to a DataFrame
         route_summary_df = pd.DataFrame(route_summary)
-    
+
         # Calculate grand totals
         total_charge = route_summary_df["Total Charge (CAD)"].sum()
         total_distance = route_summary_df["Distance (miles)"].sum()
@@ -176,7 +159,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         total_driver_pay = route_summary_df["Driver Pay (CAD)"].sum()
         total_profit = total_charge - total_driver_pay
         grand_revenue_per_mile = total_charge / total_distance if total_distance != 0 else 0
-    
+
         # Add grand totals row
         grand_totals = {
             "Route": "Grand Totals",
@@ -189,17 +172,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Driver Pay (CAD)": total_driver_pay,
             "Profit (CAD)": total_profit,
             "Date": ""
-                }
-    
+        }
+
         # Append grand totals to DataFrame
         route_summary_df = pd.concat([route_summary_df, pd.DataFrame([grand_totals])], ignore_index=True)
-    
+
         # Format currency columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-    
+
         # Highlight rows for alternate days
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
@@ -209,12 +192,12 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 return ['background-color: #c8e0f7' if date_highlight == 1 else 'background-color: #f7f7c8'] * len(row)
             else:
                 return ['background-color: white'] * len(row)
-    
+
         # Apply styling and display the DataFrame
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
-    
+
         # Generate the map
         fig = go.Figure()
         month_data = month_data.sort_values(by='PICK_UP_DATE')  # Sort routes chronologically
@@ -238,7 +221,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-    
+
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -256,7 +239,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-    
+
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
@@ -268,16 +251,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-    
+
             label_counter += 2
-    
+
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver or 'All'}",
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
-    
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
 
