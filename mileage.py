@@ -19,13 +19,20 @@ else:
     st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
 
-# Automatically detect date-related columns and ensure they are the newest (furthest right)
-date_columns = [
-    col for col in trailer_data.columns 
-    if any(month.lower() in col.lower() for month in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'])
-]
-date_columns = [col for col in date_columns if '1-31' in col or '1-30' in col or '1-29' in col]  # To filter valid date ranges
-date_columns = sorted(date_columns, key=lambda x: trailer_data.columns.get_loc(x))  # Sort columns based on their position
+# Manually specify relevant date columns
+manual_date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31', 'NOV 1-30']
+
+# Automatically deduplicate columns to select the newest (furthest right) ones
+date_columns = []
+seen_months = set()
+for col in manual_date_columns[::-1]:  # Reverse to prioritize columns from right to left
+    month = ''.join(filter(str.isalpha, col.lower()))  # Extract month name
+    if month not in seen_months:
+        seen_months.add(month)
+        date_columns.append(col)
+date_columns.reverse()  # Reverse back to maintain original order
+
+# Select Date Column dynamically
 selected_date_column = st.selectbox("Select Date Column", date_columns)
 
 # Function to create the Target % based on the provided logic
@@ -51,7 +58,7 @@ def recalculate_metrics(data, date_column):
         else:
             return 'Target Not Achieved'
 
-    data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
+        data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
     return data
 
 # Ensure calculations refresh when selecting a new column
@@ -108,8 +115,7 @@ def create_stacked_bar_chart(data):
 
     fig.update_layout(
         xaxis_title="Terminal",
-        yaxis_title="Avg Target %",
-        showlegend=True
+        yaxis_title="Avg Target %"
     )
     return fig
 
@@ -160,7 +166,7 @@ if not filtered_data.empty:
         merged_route_data = pd.merge(route_miles_avg, route_unit_count, on='Route')
         merged_route_data = pd.merge(merged_route_data, route_data, on='Route')
 
-        # Display the reordered table with Average Target % at the end
+        # Reorder columns to show Average Target % at the end
         st.write("Routes Breakdown", merged_route_data)
 
 
@@ -183,3 +189,4 @@ def convert_df(df):
 if not filtered_data.empty:
     csv = convert_df(filtered_data)
     st.download_button(label="Download Filtered Data as CSV", data=csv, file_name='filtered_trailer_data.csv', mime='text/csv')
+
