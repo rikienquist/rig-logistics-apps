@@ -121,14 +121,22 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     
     # Month dropdown for selection
     months = sorted(filtered_view['Month'].dropna().unique())
-    if "selected_month" not in st.session_state:
-        st.session_state.selected_month = months[0]
-    selected_month = st.selectbox("Select Month:", options=months, index=months.index(st.session_state.selected_month))
-    st.session_state.selected_month = selected_month
     
-    # Filter data for the selected month
-    month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
+    # If no months are available, handle gracefully
+    if len(months) == 0:
+        st.warning("No data available for the selected PUNIT and Driver ID.")
+    else:
+        # Ensure the selected month is valid for the current data
+        if "selected_month" not in st.session_state or st.session_state.selected_month not in months:
+            st.session_state.selected_month = months[0]  # Default to the first month if invalid or not set
     
+        # Render the dropdown with dynamic options
+        selected_month = st.selectbox("Select Month:", options=months, index=months.index(st.session_state.selected_month))
+        st.session_state.selected_month = selected_month
+    
+        # Filter data for the selected month
+        month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
+
     if not month_data.empty:
         # Create the route summary and map as before
         month_data['Highlight'] = (month_data['PICK_UP_DATE'].dt.date != month_data['PICK_UP_DATE'].dt.date.shift()).cumsum() % 2
