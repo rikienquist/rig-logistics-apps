@@ -12,33 +12,27 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=2)
+    # Handle duplicate columns by keeping the last occurrence (newest data)
+    trailer_data = trailer_data.loc[:, ~trailer_data.columns.duplicated(keep='last')]
+
     # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty, or 'Wide' or 'Terminal' is 'Texas'
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
-
-    # Ensure 'Planner Name' is consistently a string
-    trailer_data['Planner Name'] = trailer_data['Planner Name'].astype(str).str.strip().str.title()
 else:
     st.warning("Please upload a Mileage Report Excel file to visualize the data.")
     st.stop()
 
-# Manually specify relevant date columns
-manual_date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31', 'NOV 1-30']
+# Define relevant date columns explicitly
+date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31', 'NOV 1-30']
 
-# Automatically deduplicate columns to select the newest (furthest right) ones
-date_columns = []
-seen_months = set()
-for col in manual_date_columns[::-1]:  # Reverse to prioritize columns from right to left
-    month = ''.join(filter(str.isalpha, col.lower()))  # Extract month name
-    if month not in seen_months:
-        seen_months.add(month)
-        date_columns.append(col)
-date_columns.reverse()  # Reverse back to maintain original order
+# Validate date columns and ensure only the newest versions are selected
+available_date_columns = [col for col in date_columns if col in trailer_data.columns]
 
-# Select Date Column dynamically
-selected_date_column = st.selectbox("Select Date Column", date_columns)
+if not available_date_columns:
+    st.error("No valid date columns found in the uploaded file.")
+    st.stop()
 
-# Function to create the Target % based on the provided logic
+# Function to calculate the Target %
 def calculate_target_percentage(row, date_column):
     if row['Type'] == 'Single' and row[date_column] > 10:
         return (row[date_column] / 12000) * 100
@@ -46,6 +40,9 @@ def calculate_target_percentage(row, date_column):
         return (row[date_column] / 20000) * 100
     else:
         return None
+
+# Select Date Column dynamically
+selected_date_column = st.selectbox("Select Date Column", available_date_columns)
 
 # Dynamically reset and recalculate Target % and Target Achieved based on the selected column
 def recalculate_metrics(data, date_column):
@@ -69,6 +66,9 @@ filtered_data = recalculate_metrics(trailer_data.copy(), selected_date_column)
 
 # Remove duplicates in terminals (especially for 'Winnipeg')
 filtered_data['Terminal'] = filtered_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
+
+# Normalize Planner Name to handle case and space differences
+filtered_data['Planner Name'] = filtered_data['Planner Name'].str.strip().str.title()  # Standardize to title case
 
 # Create filters with "All" option and multiple selection enabled
 terminals = ['All'] + sorted(filtered_data['Terminal'].unique())
@@ -115,7 +115,8 @@ def create_stacked_bar_chart(data):
 
     fig.update_layout(
         xaxis_title="Terminal",
-        yaxis_title="Avg Target %"
+        yaxis_title="Avg Target %",
+        showlegend=True
     )
     return fig
 
@@ -166,7 +167,7 @@ if not filtered_data.empty:
         merged_route_data = pd.merge(route_miles_avg, route_unit_count, on='Route')
         merged_route_data = pd.merge(merged_route_data, route_data, on='Route')
 
-        # Reorder columns to show Average Target % at the end
+        # Display the reordered table with Average Target % at the end
         st.write("Routes Breakdown", merged_route_data)
 
     elif drilldown_level == 'Unit Numbers':
