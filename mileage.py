@@ -58,7 +58,7 @@ def recalculate_metrics(data, date_column):
         else:
             return 'Target Not Achieved'
 
-        data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
+    data['Target Status'] = data.apply(lambda row: check_target_achieved(row), axis=1)
     return data
 
 # Ensure calculations refresh when selecting a new column
@@ -189,4 +189,3 @@ def convert_df(df):
 if not filtered_data.empty:
     csv = convert_df(filtered_data)
     st.download_button(label="Download Filtered Data as CSV", data=csv, file_name='filtered_trailer_data.csv', mime='text/csv')
-
