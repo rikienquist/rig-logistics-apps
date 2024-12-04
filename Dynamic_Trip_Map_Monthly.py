@@ -152,134 +152,137 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     months = sorted(filtered_view['Month'].unique())
 
     # If no months are available, handle gracefully
-if len(months) == 0:
-    st.warning("No data available for the selected PUNIT and Driver ID.")
-else:
-    # Ensure the selected month is valid for the current data
-    if "selected_month" not in st.session_state or st.session_state.selected_month not in months:
-        st.session_state.selected_month = months[0]  # Default to the first month if invalid or not set
-
-    # Render the dropdown with dynamic options
-    selected_month = st.selectbox(
-        "Select Month:", 
-        options=months, 
-        index=months.index(st.session_state.selected_month)
-    )
-    st.session_state.selected_month = selected_month
-
-    # Filter data for the selected month
-    month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
-
-if not month_data.empty:
-    # Highlight rows dynamically
-    month_data['Highlight'] = (
-        month_data['Effective_Date'].dt.date != month_data['Effective_Date'].dt.date.shift()
-    ).cumsum() % 2
-
-    # Create the route summary table using vectorized operations
-    month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
-    route_summary_df = month_data.assign(
-        Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
-    )[[
-        "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
-        "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
-    ]].rename(columns={
-        "TOTAL_CHARGE_CAD": "Total Charge (CAD)", 
-        "DISTANCE": "Distance (miles)", 
-        "Straight Distance": "Straight Distance (miles)", 
-        "TOTAL_PAY_AMT": "Driver Pay (CAD)"
-    })
-
-    # Calculate grand totals
-    grand_totals = pd.DataFrame([{
-        "Route": "Grand Totals",
-        "BILL_NUMBER": "",
-        "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
-        "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
-        "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
-        "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
-        if route_summary_df["Distance (miles)"].sum() != 0 else 0,
-        "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
-        "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
-        "Effective_Date": ""
-    }])
-
-    # Append grand totals to the route summary table
-    route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-
-    # Format currency columns
-    currency_columns = ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]
-    for col in currency_columns:
-        route_summary_df[col] = route_summary_df[col].apply(
-            lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+    if len(months) == 0:
+        st.warning("No data available for the selected PUNIT and Driver ID.")
+    else:
+        # Ensure the selected month is valid for the current data
+        if "selected_month" not in st.session_state or st.session_state.selected_month not in months:
+            st.session_state.selected_month = months[0]  # Default to the first month if invalid or not set
+    
+        # Render the dropdown with dynamic options
+        selected_month = st.selectbox(
+            "Select Month:", 
+            options=months, 
+            index=months.index(st.session_state.selected_month)
         )
+        st.session_state.selected_month = selected_month
+    
+        # Filter data for the selected month
+        month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
+    
+    if not month_data.empty:
+        # Highlight rows dynamically
+        month_data['Highlight'] = (
+            month_data['Effective_Date'].dt.date != month_data['Effective_Date'].dt.date.shift()
+        ).cumsum() % 2
+    
+        # Create the route summary table using vectorized operations
+        month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
+        route_summary_df = month_data.assign(
+            Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
+        )[[
+            "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
+            "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
+        ]].rename(columns={
+            "TOTAL_CHARGE_CAD": "Total Charge (CAD)", 
+            "DISTANCE": "Distance (miles)", 
+            "Straight Distance": "Straight Distance (miles)", 
+            "TOTAL_PAY_AMT": "Driver Pay (CAD)"
+        })
+    
+        # Calculate grand totals
+        grand_totals = pd.DataFrame([{
+            "Route": "Grand Totals",
+            "BILL_NUMBER": "",
+            "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
+            "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
+            "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
+            "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
+            if route_summary_df["Distance (miles)"].sum() != 0 else 0,
+            "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
+            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
+            "Effective_Date": ""
+        }])
+    
+        # Append grand totals to the route summary table
+        route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
+    
+        # Format currency columns
+        currency_columns = ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]
+        for col in currency_columns:
+            route_summary_df[col] = route_summary_df[col].apply(
+                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+            )
+    
+        # Highlight rows for alternate days
+        def highlight_rows(row):
+            if row['Route'] == "Grand Totals":
+                return ['background-color: #f7c8c8'] * len(row)
+            elif pd.notna(row['Effective_Date']):
+                return ['background-color: #c8e0f7' if row['Effective_Date'] in month_data[month_data['Highlight'] == 1]['Effective_Date'].values 
+                        else 'background-color: #f7f7c8'] * len(row)
+            else:
+                return ['background-color: white'] * len(row)
+    
+        # Apply styling and display the DataFrame
+        styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
+        st.write("Route Summary:")
+        st.dataframe(styled_route_summary, use_container_width=True)
+    
+        # Generate the map
+        fig = go.Figure()
+        month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
+        for _, row in month_data.iterrows():
+            # Add origin marker
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON']],
+                lat=[row['ORIG_LAT']],
+                mode="markers",
+                marker=dict(size=8, color="blue"),
+                name="Origin",
+                hoverinfo="text",
+                hovertext=f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Date: {row['Effective_Date']}<br>"
+                          f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                          f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
+                          f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                          f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
+                          f"Profit (CAD): ${row['Profit (CAD)']:.2f}"
+            ))
+    
+            # Add destination marker
+            fig.add_trace(go.Scattergeo(
+                lon=[row['DEST_LON']],
+                lat=[row['DEST_LAT']],
+                mode="markers",
+                marker=dict(size=8, color="red"),
+                name="Destination",
+                hoverinfo="text",
+                hovertext=f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Date: {row['Effective_Date']}<br>"
+                          f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                          f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
+                          f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                          f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
+                          f"Profit (CAD): ${row['Profit (CAD)']:.2f}"
+            ))
+    
+            # Add route line
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON'], row['DEST_LON']],
+                lat=[row['ORIG_LAT'], row['DEST_LAT']],
+                mode="lines",
+                line=dict(width=2, color="green"),
+                name="Route"
+            ))
+    
+        # Update map layout
+        fig.update_layout(
+            title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
+            geo=dict(scope="north america", projection_type="mercator"),
+        )
+        st.plotly_chart(fig)
 
-    # Highlight rows for alternate days
-    def highlight_rows(row):
-        if row['Route'] == "Grand Totals":
-            return ['background-color: #f7c8c8'] * len(row)
-        elif pd.notna(row['Effective_Date']):
-            return ['background-color: #c8e0f7' if row['Effective_Date'] in month_data[month_data['Highlight'] == 1]['Effective_Date'].values 
-                    else 'background-color: #f7f7c8'] * len(row)
-        else:
-            return ['background-color: white'] * len(row)
-
-    # Apply styling and display the DataFrame
-    styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
-    st.write("Route Summary:")
-    st.dataframe(styled_route_summary, use_container_width=True)
-
-    # Generate the map
-    fig = go.Figure()
-    month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
-    for _, row in month_data.iterrows():
-        # Add origin marker
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON']],
-            lat=[row['ORIG_LAT']],
-            mode="markers",
-            marker=dict(size=8, color="blue"),
-            name="Origin",
-            hoverinfo="text",
-            hovertext=f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Date: {row['Effective_Date']}<br>"
-                      f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
-                      f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
-                      f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
-                      f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
-                      f"Profit (CAD): ${row['Profit (CAD)']:.2f}"
-        ))
-
-        # Add destination marker
-        fig.add_trace(go.Scattergeo(
-            lon=[row['DEST_LON']],
-            lat=[row['DEST_LAT']],
-            mode="markers",
-            marker=dict(size=8, color="red"),
-            name="Destination",
-            hoverinfo="text",
-            hovertext=f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Date: {row['Effective_Date']}<br>"
-                      f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
-                      f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
-                      f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
-                      f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
-                      f"Profit (CAD): ${row['Profit (CAD)']:.2f}"
-        ))
-
-        # Add route line
-        fig.add_trace(go.Scattergeo(
-            lon=[row['ORIG_LON'], row['DEST_LON']],
-            lat=[row['ORIG_LAT'], row['DEST_LAT']],
-            mode="lines",
-            line=dict(width=2, color="green"),
-            name="Route"
-        ))
-
-    # Update map layout
-    fig.update_layout(
-        title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
-        geo=dict(scope="north america", projection_type="mercator"),
-    )
-    st.plotly_chart(fig)
+    else:
+        st.warning("No data available for the selected PUNIT and Driver ID.")
 
 else:
-    st.warning("No data available for the selected PUNIT and Driver ID.")
+    st.warning("Please upload both the TLORDER and DRIVERPAY CSV files to proceed.")
