@@ -89,9 +89,9 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     # Add a new column for dynamic date selection
     cutoff_date = pd.Timestamp("2024-10-01")
     filtered_df['Effective_Date'] = filtered_df.apply(
-        lambda row: row['DELIVER_BY'] if pd.to_datetime(row['PICK_UP_BY']) >= cutoff_date else row['PICK_UP_BY'], axis=1
+        lambda row: row['DELIVER_BY'] if pd.to_datetime(row['DELIVER_BY']) >= pd.Timestamp("2024-10-01") else row['PICK_UP_BY'], axis=1
     )
-
+    
     # Ensure the effective date is in datetime format
     filtered_df['Effective_Date'] = pd.to_datetime(filtered_df['Effective_Date'], errors='coerce')
     filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
