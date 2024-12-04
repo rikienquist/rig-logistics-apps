@@ -235,14 +235,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         
         # Track if legend entries have been added
         legend_added = {"Origin": False, "Destination": False, "Route": False}
+        label_counter = 1  # Sequential numbering for origin and destination
         
         for _, row in month_data.iterrows():
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
                 lat=[row['ORIG_LAT']],
-                mode="markers",
+                mode="markers+text",
                 marker=dict(size=8, color="blue"),
+                text=str(label_counter),
+                textposition="top right",
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
@@ -259,8 +262,10 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
                 lat=[row['DEST_LAT']],
-                mode="markers",
+                mode="markers+text",
                 marker=dict(size=8, color="red"),
+                text=str(label_counter + 1),
+                textposition="top right",
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
@@ -284,6 +289,9 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
+        
+            # Increment the label counter
+            label_counter += 2
         
         # Update map layout
         fig.update_layout(
