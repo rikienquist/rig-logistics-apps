@@ -7,10 +7,6 @@ import numpy as np
 if "month_index" not in st.session_state:
     st.session_state.month_index = 0
 
-# Load the city coordinates from the static file
-city_coordinates_file = "trip_map_data/city_coordinates.csv"
-city_coordinates_df = pd.read_csv(city_coordinates_file)
-
 # Streamlit App Title and Instructions
 st.title("Trip Map Viewer by Month")
 
@@ -33,53 +29,71 @@ Save the query results as CSV files and upload them below to visualize the data.
 uploaded_tlorder_file = st.file_uploader("Upload TLORDER CSV file", type="csv")
 uploaded_driverpay_file = st.file_uploader("Upload DRIVERPAY CSV file", type="csv")
 
+# Optimized function to load city coordinates with caching
+@st.cache_data
+def load_city_coordinates():
+    city_coords = pd.read_csv("trip_map_data/city_coordinates.csv")
+    city_coords = city_coords.rename(columns={
+        "city": "CITY",
+        "province": "PROVINCE",
+        "latitude": "LAT",
+        "longitude": "LON"
+    })
+    return city_coords
+
+# Optimized function to preprocess TLORDER data
+@st.cache_data
+def preprocess_tlorder(file, city_coords):
+    df = pd.read_csv(file, low_memory=False)
+    # Merge for origins
+    df = df.merge(city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"}), 
+                  on=["ORIGCITY", "ORIGPROV"], how="left")
+    # Merge for destinations
+    df = df.merge(city_coords.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"}), 
+                  on=["DESTCITY", "DESTPROV"], how="left")
+    return df
+
+# Optimized function to preprocess DRIVERPAY data
+@st.cache_data
+def preprocess_driverpay(file):
+    df = pd.read_csv(file, low_memory=False)
+    df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
+    driver_pay_agg = df.groupby('BILL_NUMBER').agg({
+        'TOTAL_PAY_AMT': 'sum',
+        'DRIVER_ID': 'first'
+    }).reset_index()
+    return driver_pay_agg
+
 if uploaded_tlorder_file and uploaded_driverpay_file:
-    # Load user-uploaded data
-    tlorder_df = pd.read_csv(uploaded_tlorder_file, low_memory=False)
-    driver_pay_df = pd.read_csv(uploaded_driverpay_file, low_memory=False)
+    # Load city coordinates
+    city_coordinates_df = load_city_coordinates()
+    
+    # Preprocess TLORDER and DRIVERPAY data
+    tlorder_df = preprocess_tlorder(uploaded_tlorder_file, city_coordinates_df)
+    driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
 
-    # Preprocess city_coordinates_df for merging
-    city_coordinates_df.rename(columns={
-        "city": "ORIGCITY",
-        "province": "ORIGPROV",
-        "latitude": "ORIG_LAT",
-        "longitude": "ORIG_LON"
-    }, inplace=True)
-
-    # Merge origin coordinates
-    tlorder_df = tlorder_df.merge(city_coordinates_df, on=["ORIGCITY", "ORIGPROV"], how="left")
-
-    # Rename columns for destination and merge again
-    city_coordinates_df.rename(columns={
-        "ORIGCITY": "DESTCITY",
-        "ORIGPROV": "DESTPROV",
-        "ORIG_LAT": "DEST_LAT",
-        "ORIG_LON": "DEST_LON"
-    }, inplace=True)
-
-    tlorder_df = tlorder_df.merge(city_coordinates_df, on=["DESTCITY", "DESTPROV"], how="left")
-
-    # Filter for non-same-city routes and rows with valid coordinates
-    tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
-                            (pd.notna(tlorder_df['ORIG_LAT'])) &
-                            (pd.notna(tlorder_df['DEST_LAT']))].copy()
-
-    # Merge with driver pay
-    driver_pay_df['TOTAL_PAY_AMT'] = pd.to_numeric(driver_pay_df['TOTAL_PAY_AMT'], errors='coerce')
-    driver_pay_agg = driver_pay_df.groupby('BILL_NUMBER')['TOTAL_PAY_AMT'].sum().reset_index()
-    driver_pay_agg['DRIVER_ID'] = driver_pay_df.groupby('BILL_NUMBER')['DRIVER_ID'].first().reset_index(drop=True)
+    # Merge the preprocessed TLORDER data with aggregated DRIVERPAY data
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-    # Calculate CAD charge and filter
+    # Filter for valid routes
+    tlorder_df = tlorder_df[(tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
+                            (pd.notna(tlorder_df['ORIG_LAT'])) & 
+                            (pd.notna(tlorder_df['DEST_LAT']))].copy()
+
+    # Calculate total charge in CAD
     tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce')
     tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce')
-    tlorder_df['TOTAL_CHARGE_CAD'] = tlorder_df.apply(
-        lambda x: (x['CHARGES'] + x['XCHARGES']) * 1.38 if x['CURRENCY_CODE'] == 'USD' else x['CHARGES'] + x['XCHARGES'],
-        axis=1
+    tlorder_df['TOTAL_CHARGE_CAD'] = np.where(
+        tlorder_df['CURRENCY_CODE'] == 'USD',
+        (tlorder_df['CHARGES'] + tlorder_df['XCHARGES']) * 1.38,
+        tlorder_df['CHARGES'] + tlorder_df['XCHARGES']
     )
-    filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & (tlorder_df['DISTANCE'] != 0)].copy()
 
-    # Ensure PICK_UP_PUNIT is clean
+    # Filter for non-zero charges and distance
+    filtered_df = tlorder_df[(tlorder_df['TOTAL_CHARGE_CAD'] != 0) & 
+                             (tlorder_df['DISTANCE'] != 0)].copy()
+
+    # Ensure `PICK_UP_PUNIT` is clean
     filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].astype(str).fillna("Unknown")
 
     # Calculate Revenue per Mile and Profit
@@ -88,12 +102,16 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
     # Add a new column for dynamic date selection
     cutoff_date = pd.Timestamp("2024-10-01")
-    filtered_df['Effective_Date'] = filtered_df.apply(
-        lambda row: row['DELIVER_BY'] if pd.to_datetime(row['DELIVER_BY']) >= pd.Timestamp("2024-10-01") else row['PICK_UP_BY'], axis=1
+    filtered_df['Effective_Date'] = pd.to_datetime(
+        np.where(
+            pd.to_datetime(filtered_df['DELIVER_BY'], errors='coerce') >= cutoff_date,
+            filtered_df['DELIVER_BY'],
+            filtered_df['PICK_UP_BY']
+        ),
+        errors='coerce'
     )
     
     # Ensure the effective date is in datetime format
-    filtered_df['Effective_Date'] = pd.to_datetime(filtered_df['Effective_Date'], errors='coerce')
     filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
 
     # Calculate Straight Distance using Haversine formula
