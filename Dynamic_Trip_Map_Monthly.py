@@ -232,6 +232,10 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         # Generate the map
         fig = go.Figure()
         month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
+        
+        # Track if legend entries have been added
+        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        
         for _, row in month_data.iterrows():
             # Add origin marker
             fig.add_trace(go.Scattergeo(
@@ -239,15 +243,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 lat=[row['ORIG_LAT']],
                 mode="markers",
                 marker=dict(size=8, color="blue"),
-                name="Origin",
+                name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
                            f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Origin"]
             ))
+            legend_added["Origin"] = True
         
             # Add destination marker
             fig.add_trace(go.Scattergeo(
@@ -255,15 +261,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 lat=[row['DEST_LAT']],
                 mode="markers",
                 marker=dict(size=8, color="red"),
-                name="Destination",
+                name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
                            f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Destination"]
             ))
+            legend_added["Destination"] = True
         
             # Add route line
             fig.add_trace(go.Scattergeo(
@@ -271,8 +279,11 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 lat=[row['ORIG_LAT'], row['DEST_LAT']],
                 mode="lines",
                 line=dict(width=2, color="green"),
-                name="Route"
+                name="Route" if not legend_added["Route"] else None,
+                hoverinfo="skip",
+                showlegend=not legend_added["Route"]
             ))
+            legend_added["Route"] = True
         
         # Update map layout
         fig.update_layout(
