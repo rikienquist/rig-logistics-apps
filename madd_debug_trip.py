@@ -11,7 +11,7 @@ Use the following query to generate the required madd_debug data:
 
 Replace X with the desired INT_DATA.  
 
-Save the query results a CSV file and upload below to see the final route for the data.
+Save the query results as a CSV file and upload below to see the final route for the data.
 """)
 
 # File upload section
