@@ -24,13 +24,13 @@ if uploaded_file:
     # Normalize column names
     df.columns = df.columns.str.strip().str.upper()
 
-    # Debugging: Print column names
-    st.write("Column names in the uploaded CSV:", df.columns.tolist())
-
-    # Check for the presence of the 'INS_TIMESTAMP' column
-    if "INS_TIMESTAMP" not in df.columns:
-        st.error("The 'INS_TIMESTAMP' column is missing in the uploaded CSV file. Please check your data.")
+    # Check for the presence of the 'CREATED' column
+    if "CREATED" not in df.columns:
+        st.error("The 'CREATED' column is missing in the uploaded CSV file. Please check your data.")
     else:
+        # Truncate the CREATED column to remove seconds
+        df["CREATED"] = pd.to_datetime(df["CREATED"]).dt.strftime('%Y-%m-%d %H:%M')
+
         # Parse MESSAGE column to extract relevant data
         def parse_message(message):
             try:
@@ -44,18 +44,18 @@ if uploaded_file:
         # Extract and normalize MESSAGE column
         parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-        # Include MESSAGE_ID and INS_TIMESTAMP in the parsed data
+        # Include MESSAGE_ID and CREATED in the parsed data
         parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-        parsed_messages["INS_TIMESTAMP"] = df["INS_TIMESTAMP"]
+        parsed_messages["CREATED"] = df["CREATED"]
 
         # Prepare the data for the breakdown
         breakdown_columns = [
-            "MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "INS_TIMESTAMP"
+            "MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "CREATED"
         ]
         breakdown_data = parsed_messages[breakdown_columns]
 
-        # Group data by INS_TIMESTAMP
-        grouped_by_timestamp = breakdown_data.groupby("INS_TIMESTAMP")
+        # Group data by CREATED timestamp
+        grouped_by_timestamp = breakdown_data.groupby("CREATED")
 
         # Display breakdown by timestamps
         for i, (timestamp, group) in enumerate(grouped_by_timestamp, start=1):
