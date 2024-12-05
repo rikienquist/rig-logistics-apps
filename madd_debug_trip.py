@@ -56,54 +56,53 @@ if uploaded_file:
         group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
         st.write(group_display)
 
-        # Initialize the leg sequence processing for final routes
-        def process_routes(data):
-            sequence = {}  # Store the leg sequences as a dictionary
-            for _, row in data.iterrows():
-                leg_seq = row["LS_LEG_SEQ"]
-                action = row["ACTION"]
-                from_zone = row["LS_FROM_ZONE"]
-                to_zone = row["LS_TO_ZONE"]
-    
-                if action == "INSERT":
-                    sequence[leg_seq] = (from_zone, to_zone)
-                elif action == "DELETE":
-                    if leg_seq in sequence:
-                        del sequence[leg_seq]
-    
-            # Sort the legs by sequence number
-            sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
-    
-            # Rebuild the route ensuring proper continuity
-            route = []
-            remaining_legs = sorted_legs.copy()
-    
-            while remaining_legs:
-                if not route:
-                    # Start with the first leg
-                    route.append(remaining_legs.pop(0)[1])
+    # Initialize the leg sequence processing for final routes
+    def process_routes(data):
+        sequence = {}  # Store the leg sequences as a dictionary
+        for _, row in data.iterrows():
+            leg_seq = row["LS_LEG_SEQ"]
+            action = row["ACTION"]
+            from_zone = row["LS_FROM_ZONE"]
+            to_zone = row["LS_TO_ZONE"]
+
+            if action == "INSERT":
+                sequence[leg_seq] = (from_zone, to_zone)
+            elif action == "DELETE":
+                if leg_seq in sequence:
+                    del sequence[leg_seq]
+
+        # Sort the final sequence by leg order
+        sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
+
+        # Reorder legs into a continuous route
+        route = []
+        remaining_legs = sorted_legs.copy()
+
+        while remaining_legs:
+            if not route:
+                # Begin with the first leg
+                route.append(remaining_legs.pop(0)[1])
+            else:
+                current_to_zone = route[-1][1]
+                # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
+                next_leg = next(
+                    (leg for leg in remaining_legs if leg[1][0] == current_to_zone),
+                    None,
+                )
+
+                if next_leg:
+                    route.append(next_leg[1])
+                    remaining_legs.remove(next_leg)
                 else:
-                    current_to_zone = route[-1][1]
-                    # Find the next matching leg
-                    next_leg = next(
-                        (leg for leg in remaining_legs if leg[1][0] == current_to_zone),
-                        None,
-                    )
-                    if next_leg:
-                        route.append(next_leg[1])
-                        remaining_legs.remove(next_leg)
-                    else:
-                        # Handle unmatched legs by appending them to the route
-                        unmatched_leg = remaining_legs.pop(0)
-                        # Add missing zone if LS_TO_ZONE doesn't match LS_FROM_ZONE
-                        if unmatched_leg[1][0] != current_to_zone:
-                            route.append((current_to_zone, unmatched_leg[1][0]))
-                        # Append the unmatched leg
-                        route.append(unmatched_leg[1])
-    
-            # Ensure no duplicate zones and build the final route
-            postal_code_route = " → ".join([route[0][0]] + [leg[1] for leg in route])
-            return postal_code_route
+                    # Add missing leg if LS_FROM_ZONE doesn't match LS_TO_ZONE
+                    unmatched_leg = remaining_legs.pop(0)
+                    if unmatched_leg[1][0] != current_to_zone:
+                        route.append((current_to_zone, unmatched_leg[1][0]))
+                    route.append(unmatched_leg[1])
+
+        # Build the final postal code route
+        postal_code_route = " → ".join([route[0][0]] + [leg[1] for leg in route])
+        return postal_code_route
 
     # Process each trip and get the final routes
     parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
