@@ -67,8 +67,23 @@ if uploaded_file:
                     del sequence[leg_seq]
 
         # Sort the final sequence by leg order
-        sorted_legs = [sequence[key] for key in sorted(sequence)]
-        postal_code_route = " → ".join([sorted_legs[0][0]] + [leg[1] for leg in sorted_legs])
+        sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
+        
+        # Reorder to ensure LS_TO_ZONE of one leg matches LS_FROM_ZONE of the next
+        route = []
+        while sorted_legs:
+            if not route:
+                # Start with the first leg
+                route.append(sorted_legs.pop(0))
+            else:
+                # Find the next leg that matches
+                next_leg = next((leg for leg in sorted_legs if leg[1][0] == route[-1][1][1]), None)
+                if next_leg:
+                    route.append(next_leg)
+                    sorted_legs.remove(next_leg)
+
+        # Build the final postal code route
+        postal_code_route = " → ".join([route[0][1][0]] + [leg[1][1] for leg in route])
         return postal_code_route
 
     # Process each trip and get the final routes
