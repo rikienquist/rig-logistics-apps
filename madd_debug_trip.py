@@ -11,7 +11,7 @@ Use the following query to generate the required madd_debug data:
 
 Replace X with the desired INT_DATA.  
 
-Save the query results as a CSV file and upload below to see the final route for the data.
+Save the query results as CSV files and upload them below to see the data.
 """)
 
 # File upload section
@@ -34,29 +34,14 @@ if uploaded_file:
     # Extract and normalize MESSAGE column
     parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-    # Include MESSAGE_ID and CREATED in the parsed data
+    # Include MESSAGE_ID to sort operations in correct order
     parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-    # Truncate CREATED to remove seconds
-    parsed_messages["CREATED"] = pd.to_datetime(df["CREATED"]).dt.strftime('%Y-%m-%d %H:%M')
+    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
 
-    # Prepare the data for the breakdown
-    breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "CREATED"]
-    breakdown_data = parsed_messages[breakdown_columns]
+    # Sort the data by MESSAGE_ID to simulate the order of operations
+    parsed_messages = parsed_messages.sort_values(by="MESSAGE_ID")
 
-    # Group data by CREATED timestamp
-    grouped_by_created = breakdown_data.groupby("CREATED")
-
-    # Display breakdown by timestamps
-    for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
-        st.markdown(f"### Timestamp {i}: {timestamp}")
-        # Sort the group by MESSAGE_ID
-        group = group.sort_values(by="MESSAGE_ID")
-        group_display = group.copy()
-        group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
-        group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
-        st.write(group_display)
-
-    # Initialize the leg sequence processing for final routes
+    # Initialize the leg sequence processing
     def process_routes(data):
         sequence = {}  # Store the leg sequences as a dictionary
         for _, row in data.iterrows():
@@ -94,10 +79,12 @@ if uploaded_file:
                     route.append(next_leg[1])
                     remaining_legs.remove(next_leg)
                 else:
-                    # Add missing leg if LS_FROM_ZONE doesn't match LS_TO_ZONE
+                    # If no match is found, pick the next available leg
                     unmatched_leg = remaining_legs.pop(0)
+                    # Insert missing `LS_FROM_ZONE` if it's not connected
                     if unmatched_leg[1][0] != current_to_zone:
                         route.append((current_to_zone, unmatched_leg[1][0]))
+                    # Add the unmatched leg
                     route.append(unmatched_leg[1])
 
         # Build the final postal code route
@@ -105,13 +92,12 @@ if uploaded_file:
         return postal_code_route
 
     # Process each trip and get the final routes
-    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
     processed_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
 
     # Deduplicate trip routes by converting to a dictionary
     final_routes = processed_routes.to_dict()
 
-    # Display the final routes
+    # Display the results
     st.markdown("### Final Routes:")
     for trip, route in final_routes.items():
         st.write(f"Trip {trip}: {route}")
