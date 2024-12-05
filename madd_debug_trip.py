@@ -21,9 +21,12 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
-    # Ensure the CREATED column exists
-    if "CREATED" not in df.columns:
-        st.error("The 'CREATED' column is missing in the uploaded CSV file. Please ensure the column exists.")
+    # Normalize column names
+    df.columns = df.columns.str.strip().str.lower()
+
+    # Check for the presence of the 'ins_timestamp' column
+    if "ins_timestamp" not in df.columns:
+        st.error("The 'INS_TIMESTAMP' column is missing in the uploaded CSV file. Please check your data.")
     else:
         # Parse MESSAGE column to extract relevant data
         def parse_message(message):
@@ -36,21 +39,21 @@ if uploaded_file:
                 return None
 
         # Extract and normalize MESSAGE column
-        parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
+        parsed_messages = df["message"].apply(parse_message).dropna().apply(pd.Series)
 
-        # Include MESSAGE_ID and CREATED in the parsed data
-        parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-        parsed_messages["CREATED"] = df["CREATED"]
+        # Include MESSAGE_ID and INS_TIMESTAMP in the parsed data
+        parsed_messages["MESSAGE_ID"] = df["message_id"]
+        parsed_messages["INS_TIMESTAMP"] = df["ins_timestamp"]
 
         # Prepare the data for the breakdown
         breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]
         breakdown_data = parsed_messages[breakdown_columns]
 
-        # Group data by CREATED timestamp
-        grouped_by_created = breakdown_data.groupby("CREATED")
+        # Group data by INS_TIMESTAMP
+        grouped_by_timestamp = breakdown_data.groupby("INS_TIMESTAMP")
 
         # Display breakdown by timestamps
-        for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
+        for i, (timestamp, group) in enumerate(grouped_by_timestamp, start=1):
             st.markdown(f"### Timestamp {i}: {timestamp}")
             # Sort the group by MESSAGE_ID
             group = group.sort_values(by="MESSAGE_ID")
