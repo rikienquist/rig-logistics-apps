@@ -61,25 +61,31 @@ if uploaded_file:
 
         # Reorder legs into a continuous route
         route = []
-        remaining_legs = sorted_legs.copy()
-
-        # Start with the first leg
-        while remaining_legs:
+        visited_legs = set()
+        while sorted_legs:
             if not route:
-                # Begin with the first leg
-                route.append(remaining_legs.pop(0)[1])
+                # Start with the first leg
+                route.append(sorted_legs.pop(0)[1])
             else:
+                # Get the current LS_TO_ZONE
                 current_to_zone = route[-1][1]
-                # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
+
+                # Find the next leg that matches
                 next_leg = next(
-                    (leg for leg in remaining_legs if leg[1][0] == current_to_zone), None
+                    (leg for leg in sorted_legs if leg[1][0] == current_to_zone),
+                    None,
                 )
+
                 if next_leg:
                     route.append(next_leg[1])
-                    remaining_legs.remove(next_leg)
+                    sorted_legs.remove(next_leg)
                 else:
-                    # If no match is found, add any remaining leg and break the loop
-                    unmatched_leg = remaining_legs.pop(0)
+                    # If no match is found, pick the next available leg
+                    unmatched_leg = sorted_legs.pop(0)
+                    # Insert missing `LS_FROM_ZONE` if it's not connected
+                    if unmatched_leg[1][0] != current_to_zone:
+                        route.append((current_to_zone, unmatched_leg[1][0]))
+                    # Add the unmatched leg
                     route.append(unmatched_leg[1])
 
         # Build the final postal code route
@@ -91,5 +97,7 @@ if uploaded_file:
 
     # Display the results
     st.markdown("### Final Routes:")
+    for trip, route in final_routes.items():
+        st.write(f"Trip {trip}: {route}")
     for trip, route in final_routes.items():
         st.write(f"Trip {trip}: {route}")
