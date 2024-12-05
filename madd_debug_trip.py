@@ -21,15 +21,15 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
-    # Debugging: Print column names in the uploaded file
+    # Normalize column names
+    df.columns = df.columns.str.strip().str.upper()
+
+    # Debugging: Print column names
     st.write("Column names in the uploaded CSV:", df.columns.tolist())
 
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.lower()
-
-    # Check for the presence of the 'ins_timestamp' column
-    if "ins_timestamp" not in df.columns:
-        st.error("The 'INS_TIMESTAMP' column is missing or incorrectly named in the uploaded CSV file. Please check your data.")
+    # Check for the presence of the 'INS_TIMESTAMP' column
+    if "INS_TIMESTAMP" not in df.columns:
+        st.error("The 'INS_TIMESTAMP' column is missing in the uploaded CSV file. Please check your data.")
     else:
         # Parse MESSAGE column to extract relevant data
         def parse_message(message):
@@ -42,14 +42,16 @@ if uploaded_file:
                 return None
 
         # Extract and normalize MESSAGE column
-        parsed_messages = df["message"].apply(parse_message).dropna().apply(pd.Series)
+        parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
         # Include MESSAGE_ID and INS_TIMESTAMP in the parsed data
-        parsed_messages["MESSAGE_ID"] = df["message_id"]
-        parsed_messages["INS_TIMESTAMP"] = df["ins_timestamp"]
+        parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
+        parsed_messages["INS_TIMESTAMP"] = df["INS_TIMESTAMP"]
 
         # Prepare the data for the breakdown
-        breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]
+        breakdown_columns = [
+            "MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "INS_TIMESTAMP"
+        ]
         breakdown_data = parsed_messages[breakdown_columns]
 
         # Group data by INS_TIMESTAMP
