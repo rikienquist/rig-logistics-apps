@@ -1,6 +1,5 @@
 import pandas as pd
 import streamlit as st
-import numpy as np
 
 # Streamlit App Title and Instructions
 st.title("madd_debug Route Processor")
@@ -21,28 +20,28 @@ uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
-    
+
     # Parse MESSAGE column to extract relevant data
-    def parse_message(row):
-        action, data = row.split(" - ", 1)
-        details = dict(item.split(": ") for item in data.split(", "))
-        details["ACTION"] = action
-        return details
+    def parse_message(message):
+        try:
+            action, data = message.split(" - ", 1)
+            details = dict(item.split(": ") for item in data.split(", "))
+            details["ACTION"] = action
+            return details
+        except Exception as e:
+            return None
 
     # Extract and normalize MESSAGE column
-    parsed_messages = df["MESSAGE"].apply(parse_message).apply(pd.Series)
-    df = pd.concat([df, parsed_messages], axis=1)
-    
-    # Convert numeric columns for sorting
-    df["LS_LEG_SEQ"] = df["LS_LEG_SEQ"].astype(int)
-    df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], errors='coerce')
-    
-    # Filter only relevant columns
-    final_data = df[["LS_TRIP_NUMBER", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "ACTION"]]
-    
+    parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
+
+    # Keep only relevant columns
+    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
+    parsed_messages["TIMESTAMP"] = pd.to_datetime(parsed_messages["TIMESTAMP"], errors='coerce')
+
+    final_data = parsed_messages[["LS_TRIP_NUMBER", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "ACTION", "TIMESTAMP"]]
+
     # Process actions to determine the final sequence
     def process_routes(data):
-        # Group by trip number
         results = {}
         grouped = data.groupby("LS_TRIP_NUMBER")
         for trip, group in grouped:
@@ -59,7 +58,7 @@ if uploaded_file:
         return results
 
     final_routes = process_routes(final_data)
-    
+
     # Display the results
     st.markdown("### Final Routes:")
     for trip, route in final_routes.items():
