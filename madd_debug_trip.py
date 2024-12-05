@@ -14,6 +14,22 @@ Replace X with the desired INT_DATA.
 Save the query results as a CSV file and upload below to see the final route for the data.
 """)
 
+import pandas as pd
+import streamlit as st
+
+# Streamlit App Title and Instructions
+st.title("madd_debug Route Processor")
+
+st.markdown("""
+### Instructions:
+Use the following query to generate the required madd_debug data:  
+`select * from madd_debug where int_data='X';`  
+
+Replace X with the desired INT_DATA.  
+
+Save the query results as CSV files and upload them below to see the data.
+""")
+
 # File upload section
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
@@ -61,27 +77,26 @@ if uploaded_file:
 
         # Reorder legs into a continuous route
         route = []
-        visited_legs = set()
-        while sorted_legs:
-            if not route:
-                # Start with the first leg
-                route.append(sorted_legs.pop(0)[1])
-            else:
-                # Get the current LS_TO_ZONE
-                current_to_zone = route[-1][1]
+        remaining_legs = sorted_legs.copy()
 
-                # Find the next leg that matches
+        while remaining_legs:
+            if not route:
+                # Begin with the first leg
+                route.append(remaining_legs.pop(0)[1])
+            else:
+                current_to_zone = route[-1][1]
+                # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
                 next_leg = next(
-                    (leg for leg in sorted_legs if leg[1][0] == current_to_zone),
+                    (leg for leg in remaining_legs if leg[1][0] == current_to_zone),
                     None,
                 )
 
                 if next_leg:
                     route.append(next_leg[1])
-                    sorted_legs.remove(next_leg)
+                    remaining_legs.remove(next_leg)
                 else:
                     # If no match is found, pick the next available leg
-                    unmatched_leg = sorted_legs.pop(0)
+                    unmatched_leg = remaining_legs.pop(0)
                     # Insert missing `LS_FROM_ZONE` if it's not connected
                     if unmatched_leg[1][0] != current_to_zone:
                         route.append((current_to_zone, unmatched_leg[1][0]))
@@ -93,11 +108,12 @@ if uploaded_file:
         return postal_code_route
 
     # Process each trip and get the final routes
-    final_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
+    processed_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
+
+    # Deduplicate trip routes by converting to a dictionary
+    final_routes = processed_routes.to_dict()
 
     # Display the results
     st.markdown("### Final Routes:")
-    for trip, route in final_routes.items():
-        st.write(f"Trip {trip}: {route}")
     for trip, route in final_routes.items():
         st.write(f"Trip {trip}: {route}")
