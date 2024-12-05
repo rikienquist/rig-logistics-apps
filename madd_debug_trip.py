@@ -21,12 +21,15 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
+    # Debugging: Print column names in the uploaded file
+    st.write("Column names in the uploaded CSV:", df.columns.tolist())
+
     # Normalize column names
     df.columns = df.columns.str.strip().str.lower()
 
     # Check for the presence of the 'ins_timestamp' column
     if "ins_timestamp" not in df.columns:
-        st.error("The 'INS_TIMESTAMP' column is missing in the uploaded CSV file. Please check your data.")
+        st.error("The 'INS_TIMESTAMP' column is missing or incorrectly named in the uploaded CSV file. Please check your data.")
     else:
         # Parse MESSAGE column to extract relevant data
         def parse_message(message):
