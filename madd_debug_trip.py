@@ -41,7 +41,6 @@ if uploaded_file:
     # Sort the data by MESSAGE_ID to simulate the order of operations
     parsed_messages = parsed_messages.sort_values(by="MESSAGE_ID")
 
-    # Initialize the leg sequence processing
     def process_routes(data):
         sequence = {}  # Store the leg sequences as a dictionary
         for _, row in data.iterrows():
@@ -49,7 +48,7 @@ if uploaded_file:
             action = row["ACTION"]
             from_zone = row["LS_FROM_ZONE"]
             to_zone = row["LS_TO_ZONE"]
-
+    
             if action == "INSERT":
                 # Shift existing legs back if necessary
                 temp_sequence = {}
@@ -60,15 +59,15 @@ if uploaded_file:
                         temp_sequence[existing_seq] = sequence[existing_seq]
                 temp_sequence[leg_seq] = (from_zone, to_zone)
                 sequence = temp_sequence
-
+    
             elif action == "DELETE":
                 # Remove the specified leg sequence
                 if leg_seq in sequence:
                     del sequence[leg_seq]
-
+    
         # Sort the final sequence by leg order
         sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
-        
+    
         # Reorder to ensure LS_TO_ZONE of one leg matches LS_FROM_ZONE of the next
         route = []
         while sorted_legs:
@@ -81,9 +80,21 @@ if uploaded_file:
                 if next_leg:
                     route.append(next_leg)
                     sorted_legs.remove(next_leg)
-
-        # Build the final postal code route
-        postal_code_route = " → ".join([route[0][1][0]] + [leg[1][1] for leg in route])
+                else:
+                    # If no matching leg is found, break to avoid infinite loop
+                    break
+    
+        # If not all legs could be linked, warn about missing links
+        if sorted_legs:
+            unmatched_legs = [leg[1] for leg in sorted_legs]
+            st.warning(f"Unmatched legs found: {unmatched_legs}")
+    
+        # Build the final postal code route if possible
+        if route:
+            postal_code_route = " → ".join([route[0][1][0]] + [leg[1][1] for leg in route])
+        else:
+            postal_code_route = "No valid route could be constructed."
+    
         return postal_code_route
 
     # Process each trip and get the final routes
