@@ -58,24 +58,29 @@ if uploaded_file:
 
         # Sort the final sequence by leg order
         sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
-        
-        # Build the route based on matching logic
-        if not sorted_legs:
-            return "No valid route"
+
+        # Reorder legs into a continuous route
+        route = []
+        remaining_legs = sorted_legs.copy()
 
         # Start with the first leg
-        route = [sorted_legs.pop(0)[1]]
-
-        # Add legs ensuring matching `LS_TO_ZONE` and `LS_FROM_ZONE`
-        while sorted_legs:
-            current_to_zone = route[-1][1]
-            next_leg = next((leg for leg in sorted_legs if leg[1][0] == current_to_zone), None)
-            if next_leg:
-                route.append(next_leg[1])
-                sorted_legs.remove(next_leg)
+        while remaining_legs:
+            if not route:
+                # Begin with the first leg
+                route.append(remaining_legs.pop(0)[1])
             else:
-                # Handle cases where there's no direct match
-                break
+                current_to_zone = route[-1][1]
+                # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
+                next_leg = next(
+                    (leg for leg in remaining_legs if leg[1][0] == current_to_zone), None
+                )
+                if next_leg:
+                    route.append(next_leg[1])
+                    remaining_legs.remove(next_leg)
+                else:
+                    # If no match is found, add any remaining leg and break the loop
+                    unmatched_leg = remaining_legs.pop(0)
+                    route.append(unmatched_leg[1])
 
         # Build the final postal code route
         postal_code_route = " → ".join([route[0][0]] + [leg[1] for leg in route])
