@@ -50,14 +50,26 @@ if uploaded_file:
     # Extract and normalize MESSAGE column
     parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-    # Include MESSAGE_ID to sort operations in correct order
+    # Include MESSAGE_ID and CREATED in the parsed data
     parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
+    parsed_messages["CREATED"] = df["CREATED"]
 
-    # Sort the data by MESSAGE_ID to simulate the order of operations
-    parsed_messages = parsed_messages.sort_values(by="MESSAGE_ID")
+    # Prepare the data for the breakdown
+    breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]
+    breakdown_data = parsed_messages[breakdown_columns]
 
-    # Initialize the leg sequence processing
+    # Group data by CREATED timestamp
+    grouped_by_created = breakdown_data.groupby("CREATED")
+
+    # Display breakdown by timestamps
+    for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
+        st.markdown(f"### Timestamp {i}: {timestamp}")
+        group_display = group.copy()
+        group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
+        group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
+        st.write(group_display)
+
+    # Initialize the leg sequence processing for final routes
     def process_routes(data):
         sequence = {}  # Store the leg sequences as a dictionary
         for _, row in data.iterrows():
@@ -108,12 +120,13 @@ if uploaded_file:
         return postal_code_route
 
     # Process each trip and get the final routes
+    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
     processed_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
 
     # Deduplicate trip routes by converting to a dictionary
     final_routes = processed_routes.to_dict()
 
-    # Display the results
+    # Display the final routes
     st.markdown("### Final Routes:")
     for trip, route in final_routes.items():
         st.write(f"Trip {trip}: {route}")
