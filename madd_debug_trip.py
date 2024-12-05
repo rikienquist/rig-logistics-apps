@@ -52,9 +52,10 @@ if uploaded_file:
                     sequence[row["LS_LEG_SEQ"]] = (row["LS_FROM_ZONE"], row["LS_TO_ZONE"])
                 elif row["ACTION"] == "DELETE" and row["LS_LEG_SEQ"] in sequence:
                     del sequence[row["LS_LEG_SEQ"]]
-            # Sort sequence by leg and format
-            final_sequence = [sequence[key] for key in sorted(sequence)]
-            results[trip] = final_sequence
+            # Sort sequence by leg and format as a single string
+            sorted_legs = [sequence[key] for key in sorted(sequence)]
+            postal_code_route = " → ".join([sorted_legs[0][0]] + [leg[1] for leg in sorted_legs])
+            results[trip] = postal_code_route
         return results
 
     final_routes = process_routes(final_data)
@@ -62,6 +63,4 @@ if uploaded_file:
     # Display the results
     st.markdown("### Final Routes:")
     for trip, route in final_routes.items():
-        st.write(f"Trip {trip}:")
-        for i, (from_zone, to_zone) in enumerate(route, start=1):
-            st.write(f"  Leg {i}: {from_zone} -> {to_zone}")
+        st.write(f"Trip {trip}: {route}")
