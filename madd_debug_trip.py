@@ -14,22 +14,6 @@ Replace X with the desired INT_DATA.
 Save the query results as a CSV file and upload below to see the final route for the data.
 """)
 
-import pandas as pd
-import streamlit as st
-
-# Streamlit App Title and Instructions
-st.title("madd_debug Route Processor")
-
-st.markdown("""
-### Instructions:
-Use the following query to generate the required madd_debug data:  
-`select * from madd_debug where int_data='X';`  
-
-Replace X with the desired INT_DATA.  
-
-Save the query results as CSV files and upload them below to see the data.
-""")
-
 # File upload section
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
