@@ -51,17 +51,24 @@ if uploaded_file:
         st.markdown(f"#### Timestamp: {timestamp}")
 
         # Filter data for the current timestamp
-        breakdown_data = parsed_messages[parsed_messages["CREATED"] == timestamp]
+        breakdown_data = parsed_messages[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]][parsed_messages["CREATED"] == timestamp]
 
-        # Prepare breakdown table
-        breakdown_table = breakdown_data[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]]
-        breakdown_table["Route"] = breakdown_table["LS_FROM_ZONE"] + " → " + breakdown_table["LS_TO_ZONE"]
-        breakdown_table["Action"] = breakdown_table["ACTION"].apply(
-            lambda x: f"**:green[{x}]**" if x == "INSERT" else f"**:red[{x}]**"
-        )
+        # Add the route column
+        breakdown_data["Route"] = breakdown_data["LS_FROM_ZONE"] + " → " + breakdown_data["LS_TO_ZONE"]
 
-        # Display the breakdown table
-        st.table(breakdown_table[["MESSAGE_ID", "Action", "LS_LEG_SEQ", "Route", "USER"]])
+        # Function to apply row-wise styles
+        def highlight_row(row):
+            if row["ACTION"] == "INSERT":
+                return ['background-color: lightgreen'] * len(row)
+            elif row["ACTION"] == "DELETE":
+                return ['background-color: lightcoral'] * len(row)
+            return [''] * len(row)
+
+        # Style the dataframe
+        styled_table = breakdown_data[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]].style.apply(highlight_row, axis=1)
+
+        # Display the styled dataframe
+        st.dataframe(styled_table)
 
     # Initialize the leg sequence processing
     def process_routes(data):
