@@ -21,6 +21,9 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
+    # Ensure CREATED is a datetime column and round to minutes (removing seconds)
+    df["CREATED"] = pd.to_datetime(df["CREATED"]).dt.strftime("%Y-%m-%d %H:%M")
+
     # Parse MESSAGE column to extract relevant data
     def parse_message(message):
         try:
@@ -34,12 +37,31 @@ if uploaded_file:
     # Extract and normalize MESSAGE column
     parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-    # Include MESSAGE_ID to sort operations in correct order
+    # Include relevant columns
     parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
+    parsed_messages["CREATED"] = df["CREATED"]
     parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
 
-    # Sort the data by MESSAGE_ID to simulate the order of operations
-    parsed_messages = parsed_messages.sort_values(by="MESSAGE_ID")
+    # Sort the data by MESSAGE_ID to ensure operations are applied in order
+    parsed_messages = parsed_messages.sort_values(by=["CREATED", "MESSAGE_ID"])
+
+    # Generate breakdown tables for each unique CREATED timestamp
+    st.markdown("### Breakdown by Timestamps")
+    for timestamp in parsed_messages["CREATED"].unique():
+        st.markdown(f"#### Timestamp: {timestamp}")
+
+        # Filter data for the current timestamp
+        breakdown_data = parsed_messages[parsed_messages["CREATED"] == timestamp]
+
+        # Prepare breakdown table
+        breakdown_table = breakdown_data[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]]
+        breakdown_table["Route"] = breakdown_table["LS_FROM_ZONE"] + " → " + breakdown_table["LS_TO_ZONE"]
+        breakdown_table["Action"] = breakdown_table["ACTION"].apply(
+            lambda x: f"**:green[{x}]**" if x == "INSERT" else f"**:red[{x}]**"
+        )
+
+        # Display the breakdown table
+        st.table(breakdown_table[["MESSAGE_ID", "Action", "LS_LEG_SEQ", "Route", "USER"]])
 
     # Initialize the leg sequence processing
     def process_routes(data):
