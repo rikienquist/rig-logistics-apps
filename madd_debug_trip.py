@@ -21,110 +21,99 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.upper()
+    # Parse MESSAGE column to extract relevant data
+    def parse_message(message):
+        try:
+            action, data = message.split(" - ", 1)
+            details = dict(item.split(": ") for item in data.split(", "))
+            details["ACTION"] = action
+            return details
+        except Exception as e:
+            return None
 
-    # Check for the presence of the 'CREATED' column
-    if "CREATED" not in df.columns:
-        st.error("The 'CREATED' column is missing in the uploaded CSV file. Please check your data.")
-    else:
-        # Truncate the CREATED column to remove seconds
-        df["CREATED"] = pd.to_datetime(df["CREATED"]).dt.strftime('%Y-%m-%d %H:%M')
+    # Extract and normalize MESSAGE column
+    parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-        # Parse MESSAGE column to extract relevant data
-        def parse_message(message):
-            try:
-                action, data = message.split(" - ", 1)
-                details = dict(item.split(": ") for item in data.split(", "))
-                details["ACTION"] = action
-                return details
-            except Exception as e:
-                return None
+    # Include MESSAGE_ID and CREATED in the parsed data
+    parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
+    # Truncate CREATED to remove seconds
+    parsed_messages["CREATED"] = pd.to_datetime(df["CREATED"]).dt.strftime('%Y-%m-%d %H:%M')
 
-        # Extract and normalize MESSAGE column
-        parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
+    # Prepare the data for the breakdown
+    breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "CREATED"]
+    breakdown_data = parsed_messages[breakdown_columns]
 
-        # Include MESSAGE_ID and CREATED in the parsed data
-        parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-        parsed_messages["CREATED"] = df["CREATED"]
+    # Group data by CREATED timestamp
+    grouped_by_created = breakdown_data.groupby("CREATED")
 
-        # Prepare the data for the breakdown
-        breakdown_columns = [
-            "MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER", "CREATED"
-        ]
-        breakdown_data = parsed_messages[breakdown_columns]
+    # Display breakdown by timestamps
+    for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
+        st.markdown(f"### Timestamp {i}: {timestamp}")
+        # Sort the group by MESSAGE_ID
+        group = group.sort_values(by="MESSAGE_ID")
+        group_display = group.copy()
+        group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
+        group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
+        st.write(group_display)
 
-        # Group data by CREATED timestamp
-        grouped_by_timestamp = breakdown_data.groupby("CREATED")
+    # Initialize the leg sequence processing for final routes
+    def process_routes(data):
+        sequence = {}  # Store the leg sequences as a dictionary
+        for _, row in data.iterrows():
+            leg_seq = row["LS_LEG_SEQ"]
+            action = row["ACTION"]
+            from_zone = row["LS_FROM_ZONE"]
+            to_zone = row["LS_TO_ZONE"]
 
-        # Display breakdown by timestamps
-        for i, (timestamp, group) in enumerate(grouped_by_timestamp, start=1):
-            st.markdown(f"### Timestamp {i}: {timestamp}")
-            # Sort the group by MESSAGE_ID
-            group = group.sort_values(by="MESSAGE_ID")
-            group_display = group.copy()
-            group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
-            group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
-            st.write(group_display)
+            if action == "INSERT":
+                sequence[leg_seq] = (from_zone, to_zone)
+            elif action == "DELETE":
+                if leg_seq in sequence:
+                    del sequence[leg_seq]
 
-        # Initialize the leg sequence processing for final routes
-        def process_routes(data):
-            sequence = {}  # Store the leg sequences as a dictionary
-            for _, row in data.iterrows():
-                leg_seq = row["LS_LEG_SEQ"]
-                action = row["ACTION"]
-                from_zone = row["LS_FROM_ZONE"]
-                to_zone = row["LS_TO_ZONE"]
+        # Sort the final sequence by leg order
+        sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
 
-                if action == "INSERT":
-                    sequence[leg_seq] = (from_zone, to_zone)
-                elif action == "DELETE":
-                    if leg_seq in sequence:
-                        del sequence[leg_seq]
+        # Reorder legs into a continuous route
+        route = []
+        remaining_legs = sorted_legs.copy()
 
-            # Sort the final sequence by leg order
-            sorted_legs = [(k, sequence[k]) for k in sorted(sequence)]
+        while remaining_legs:
+            if not route:
+                # Begin with the first leg
+                route.append(remaining_legs.pop(0)[1])
+            else:
+                current_to_zone = route[-1][1]
+                # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
+                next_leg = next(
+                    (leg for leg in remaining_legs if leg[1][0] == current_to_zone),
+                    None,
+                )
 
-            # Reorder legs into a continuous route
-            route = []
-            remaining_legs = sorted_legs.copy()
-
-            while remaining_legs:
-                if not route:
-                    # Begin with the first leg
-                    route.append(remaining_legs.pop(0)[1])
+                if next_leg:
+                    route.append(next_leg[1])
+                    remaining_legs.remove(next_leg)
                 else:
-                    current_to_zone = route[-1][1]
-                    # Find the next leg where LS_FROM_ZONE matches the current LS_TO_ZONE
-                    next_leg = next(
-                        (leg for leg in remaining_legs if leg[1][0] == current_to_zone),
-                        None,
-                    )
+                    # If no match is found, pick the next available leg
+                    unmatched_leg = remaining_legs.pop(0)
+                    # Insert missing `LS_FROM_ZONE` if it's not connected
+                    if unmatched_leg[1][0] != current_to_zone:
+                        route.append((current_to_zone, unmatched_leg[1][0]))
+                    # Add the unmatched leg
+                    route.append(unmatched_leg[1])
 
-                    if next_leg:
-                        route.append(next_leg[1])
-                        remaining_legs.remove(next_leg)
-                    else:
-                        # If no match is found, pick the next available leg
-                        unmatched_leg = remaining_legs.pop(0)
-                        # Insert missing `LS_FROM_ZONE` if it's not connected
-                        if unmatched_leg[1][0] != current_to_zone:
-                            route.append((current_to_zone, unmatched_leg[1][0]))
-                        # Add the unmatched leg
-                        route.append(unmatched_leg[1])
+        # Build the final postal code route
+        postal_code_route = " → ".join([route[0][0]] + [leg[1] for leg in route])
+        return postal_code_route
 
-            # Build the final postal code route
-            postal_code_route = " → ".join([route[0][0]] + [leg[1] for leg in route])
-            return postal_code_route
+    # Process each trip and get the final routes
+    parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
+    processed_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
 
-        # Process each trip and get the final routes
-        parsed_messages["LS_LEG_SEQ"] = parsed_messages["LS_LEG_SEQ"].astype(int)
-        processed_routes = parsed_messages.groupby("LS_TRIP_NUMBER").apply(process_routes)
+    # Deduplicate trip routes by converting to a dictionary
+    final_routes = processed_routes.to_dict()
 
-        # Deduplicate trip routes by converting to a dictionary
-        final_routes = processed_routes.to_dict()
-
-        # Display the final routes
-        st.markdown("### Final Routes:")
-        for trip, route in final_routes.items():
-            st.write(f"Trip {trip}: {route}")
+    # Display the final routes
+    st.markdown("### Final Routes:")
+    for trip, route in final_routes.items():
+        st.write(f"Trip {trip}: {route}")
