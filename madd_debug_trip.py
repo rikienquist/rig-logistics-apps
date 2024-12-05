@@ -21,47 +21,39 @@ if uploaded_file:
     # Load the CSV file
     df = pd.read_csv(uploaded_file)
 
-    # Debug: Display the column names
-    st.write("Columns in uploaded file:", df.columns.tolist())
+    # Parse MESSAGE column to extract relevant data
+    def parse_message(message):
+        try:
+            action, data = message.split(" - ", 1)
+            details = dict(item.split(": ") for item in data.split(", "))
+            details["ACTION"] = action
+            return details
+        except Exception as e:
+            return None
 
-    # Ensure column names are stripped of extra spaces
-    df.columns = df.columns.str.strip()
+    # Extract and normalize MESSAGE column
+    parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
 
-    # Check if 'CREATED' column exists
-    if "CREATED" not in df.columns:
-        st.error("The 'CREATED' column is missing from the uploaded file. Please check your input data.")
-    else:
-        # Parse MESSAGE column to extract relevant data
-        def parse_message(message):
-            try:
-                action, data = message.split(" - ", 1)
-                details = dict(item.split(": ") for item in data.split(", "))
-                details["ACTION"] = action
-                return details
-            except Exception as e:
-                return None
+    # Include MESSAGE_ID and CREATED in the parsed data
+    parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
+    parsed_messages["CREATED"] = df["CREATED"]
 
-        # Extract and normalize MESSAGE column
-        parsed_messages = df["MESSAGE"].apply(parse_message).dropna().apply(pd.Series)
+    # Prepare the data for the breakdown
+    breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]
+    breakdown_data = parsed_messages[breakdown_columns]
 
-        # Include MESSAGE_ID and CREATED in the parsed data
-        parsed_messages["MESSAGE_ID"] = df["MESSAGE_ID"]
-        parsed_messages["CREATED"] = df["CREATED"]
+    # Group data by CREATED timestamp
+    grouped_by_created = breakdown_data.groupby("CREATED")
 
-        # Prepare the data for the breakdown
-        breakdown_columns = ["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "LS_FROM_ZONE", "LS_TO_ZONE", "USER"]
-        breakdown_data = parsed_messages[breakdown_columns]
-
-        # Group data by CREATED timestamp
-        grouped_by_created = breakdown_data.groupby("CREATED")
-
-        # Display breakdown by timestamps
-        for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
-            st.markdown(f"### Timestamp {i}: {timestamp}")
-            group_display = group.copy()
-            group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
-            group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
-            st.write(group_display)
+    # Display breakdown by timestamps
+    for i, (timestamp, group) in enumerate(grouped_by_created, start=1):
+        st.markdown(f"### Timestamp {i}: {timestamp}")
+        # Sort the group by MESSAGE_ID
+        group = group.sort_values(by="MESSAGE_ID")
+        group_display = group.copy()
+        group_display["Route"] = group_display["LS_FROM_ZONE"] + " → " + group_display["LS_TO_ZONE"]
+        group_display = group_display[["MESSAGE_ID", "ACTION", "LS_LEG_SEQ", "Route", "USER"]]
+        st.write(group_display)
 
     # Initialize the leg sequence processing for final routes
     def process_routes(data):
