@@ -164,16 +164,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             options=months, 
             index=months.index(st.session_state.selected_month)
         )
-    
+        
         # Update session state immediately on selection
         if st.session_state.selected_month != selected_month:
             st.session_state.selected_month = selected_month
-    
+        
         # Filter data for the selected month
         month_data = filtered_view[filtered_view['Month'] == st.session_state.selected_month].copy()
     
     if not month_data.empty:
         # Sort month_data by Effective_Date
+        month_data['Effective_Date'] = pd.to_datetime(month_data['Effective_Date'], format="%Y-%m-%d %H:%M:%S", errors='coerce')
         month_data = month_data.sort_values(by='Effective_Date')
     
         # Highlight rows dynamically
@@ -197,6 +198,9 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     
         # Sort the route summary by Effective_Date
         route_summary_df = route_summary_df.sort_values(by="Effective_Date")
+    
+        # Convert Effective_Date to string to avoid Arrow serialization issues
+        route_summary_df['Effective_Date'] = route_summary_df['Effective_Date'].astype(str)
     
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
@@ -240,22 +244,23 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         # Generate the map
         fig = go.Figure()
         month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
-        
+    
         # Initialize a global counter for sequence numbers
+        legend_added = {"Origin": False, "Destination": False, "Route": False}  # Ensure legend tracking
         sequence_counter = 1
         sequence_numbers = {}  # Dictionary to track sequence numbers for each location
-        
+    
         for _, row in month_data.iterrows():
             # Assign sequence numbers for origin
             if (row['ORIGCITY'], row['ORIGPROV']) not in sequence_numbers:
                 sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])] = sequence_counter
                 sequence_counter += 1
-        
+    
             # Assign sequence numbers for destination
             if (row['DESTCITY'], row['DESTPROV']) not in sequence_numbers:
                 sequence_numbers[(row['DESTCITY'], row['DESTPROV'])] = sequence_counter
                 sequence_counter += 1
-        
+    
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
@@ -275,7 +280,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-        
+    
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -295,7 +300,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-        
+    
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
@@ -307,7 +312,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-        
+    
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
