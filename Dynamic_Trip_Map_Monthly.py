@@ -196,11 +196,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             label_counter += 1
             city_sequence[row['DESTCITY']].append(label_counter)
             label_counter += 1
-
+        
+        # Track if legend entries have been added
+        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        
         for _, row in month_data.iterrows():
             origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
             destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
-
+        
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
@@ -209,16 +212,18 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 marker=dict(size=8, color="blue"),
                 text=origin_sequence,
                 textposition="top right",
-                name="Origin" if "Origin" not in fig.data else None,
+                name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
                            f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Origin"]
             ))
-
+            legend_added["Origin"] = True
+        
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
@@ -227,26 +232,31 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 marker=dict(size=8, color="red"),
                 text=destination_sequence,
                 textposition="top right",
-                name="Destination" if "Destination" not in fig.data else None,
+                name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
                            f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
                            f"Distance (miles): {row['DISTANCE']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
                            f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Destination"]
             ))
-
+            legend_added["Destination"] = True
+        
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
                 lat=[row['ORIG_LAT'], row['DEST_LAT']],
                 mode="lines",
                 line=dict(width=2, color="green"),
-                name="Route" if "Route" not in fig.data else None,
-                hoverinfo="skip"
+                name="Route" if not legend_added["Route"] else None,
+                hoverinfo="skip",
+                showlegend=not legend_added["Route"]
             ))
-
+            legend_added["Route"] = True
+        
+        # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
             geo=dict(scope="north america", projection_type="mercator"),
