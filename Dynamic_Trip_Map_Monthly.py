@@ -151,11 +151,10 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     # Month dropdown for selection
     months = sorted(filtered_view['Month'].unique())
 
-    # If no months are available, handle gracefully
+    # Ensure the selected month is valid for the current data
     if len(months) == 0:
         st.warning("No data available for the selected PUNIT and Driver ID.")
     else:
-        # Ensure the selected month is valid for the current data
         if "selected_month" not in st.session_state or st.session_state.selected_month not in months:
             st.session_state.selected_month = months[0]  # Default to the first month if invalid or not set
     
@@ -165,12 +164,18 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             options=months, 
             index=months.index(st.session_state.selected_month)
         )
-        st.session_state.selected_month = selected_month
+    
+        # Update session state immediately on selection
+        if st.session_state.selected_month != selected_month:
+            st.session_state.selected_month = selected_month
     
         # Filter data for the selected month
-        month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
+        month_data = filtered_view[filtered_view['Month'] == st.session_state.selected_month].copy()
     
     if not month_data.empty:
+        # Sort month_data by Effective_Date
+        month_data = month_data.sort_values(by='Effective_Date')
+    
         # Highlight rows dynamically
         month_data['Highlight'] = (
             month_data['Effective_Date'].dt.date != month_data['Effective_Date'].dt.date.shift()
@@ -180,7 +185,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
-        )[[
+        )[[  # Select and rename columns for display
             "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
             "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
         ]].rename(columns={
@@ -189,6 +194,9 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Straight Distance": "Straight Distance (miles)", 
             "TOTAL_PAY_AMT": "Driver Pay (CAD)"
         })
+    
+        # Sort the route summary by Effective_Date
+        route_summary_df = route_summary_df.sort_values(by="Effective_Date")
     
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
@@ -232,19 +240,27 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         # Generate the map
         fig = go.Figure()
         month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
-        
+    
         # Track if legend entries have been added
         legend_added = {"Origin": False, "Destination": False, "Route": False}
-        label_counter = 1  # Sequential numbering for origin and destination
-        
-        for _, row in month_data.iterrows():
+        sequence_numbers = {}  # Dictionary to track sequence numbers for each location
+    
+        for index, row in month_data.iterrows():
+            origin_label = sequence_numbers.get((row['ORIGCITY'], row['ORIGPROV']), [])
+            origin_label.append(len(origin_label) * 2 + 1)
+            sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])] = origin_label
+    
+            destination_label = sequence_numbers.get((row['DESTCITY'], row['DESTPROV']), [])
+            destination_label.append(len(destination_label) * 2 + 2)
+            sequence_numbers[(row['DESTCITY'], row['DESTPROV'])] = destination_label
+    
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
                 lat=[row['ORIG_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="blue"),
-                text=str(label_counter),
+                text=",".join(map(str, sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])])),
                 textposition="top right",
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
@@ -257,14 +273,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-        
+    
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
                 lat=[row['DEST_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="red"),
-                text=str(label_counter + 1),
+                text=",".join(map(str, sequence_numbers[(row['DESTCITY'], row['DESTPROV'])])),
                 textposition="top right",
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
@@ -277,7 +293,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-        
+    
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
@@ -289,17 +305,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-        
-            # Increment the label counter
-            label_counter += 2
-        
+    
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
-
+    
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
 
