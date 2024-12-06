@@ -240,27 +240,29 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         # Generate the map
         fig = go.Figure()
         month_data = month_data.sort_values(by='Effective_Date')  # Sort routes chronologically
-    
-        # Track if legend entries have been added
-        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        
+        # Initialize a global counter for sequence numbers
+        sequence_counter = 1
         sequence_numbers = {}  # Dictionary to track sequence numbers for each location
-    
-        for index, row in month_data.iterrows():
-            origin_label = sequence_numbers.get((row['ORIGCITY'], row['ORIGPROV']), [])
-            origin_label.append(len(origin_label) * 2 + 1)
-            sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])] = origin_label
-    
-            destination_label = sequence_numbers.get((row['DESTCITY'], row['DESTPROV']), [])
-            destination_label.append(len(destination_label) * 2 + 2)
-            sequence_numbers[(row['DESTCITY'], row['DESTPROV'])] = destination_label
-    
+        
+        for _, row in month_data.iterrows():
+            # Assign sequence numbers for origin
+            if (row['ORIGCITY'], row['ORIGPROV']) not in sequence_numbers:
+                sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])] = sequence_counter
+                sequence_counter += 1
+        
+            # Assign sequence numbers for destination
+            if (row['DESTCITY'], row['DESTPROV']) not in sequence_numbers:
+                sequence_numbers[(row['DESTCITY'], row['DESTPROV'])] = sequence_counter
+                sequence_counter += 1
+        
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
                 lat=[row['ORIG_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="blue"),
-                text=",".join(map(str, sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])])),
+                text=str(sequence_numbers[(row['ORIGCITY'], row['ORIGPROV'])]),
                 textposition="top right",
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
@@ -273,14 +275,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-    
+        
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
                 lat=[row['DEST_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="red"),
-                text=",".join(map(str, sequence_numbers[(row['DESTCITY'], row['DESTPROV'])])),
+                text=str(sequence_numbers[(row['DESTCITY'], row['DESTPROV'])]),
                 textposition="top right",
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
@@ -293,7 +295,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-    
+        
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
@@ -305,7 +307,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-    
+        
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
