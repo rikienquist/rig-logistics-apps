@@ -13,12 +13,12 @@ st.title("Trip Map Viewer by Month")
 st.markdown("""
 ### Instructions:
 Use the following query to generate the required TLORDER data:  
-SELECT BILL_NUMBER, DETAIL_LINE_ID, CALLNAME, ORIGCITY, ORIGPROV, DESTCITY, DESTPROV, PICK_UP_PUNIT, DELIVERY_PUNIT, CHARGES, XCHARGES, DISTANCE, DISTANCE_UNITS, CURRENCY_CODE, PICK_UP_BY, DELIVER_BY  
-FROM TLORDER WHERE "PICK_UP_BY" BETWEEN 'X' AND 'Y';  
+`SELECT BILL_NUMBER, DETAIL_LINE_ID, CALLNAME, ORIGCITY, ORIGPROV, DESTCITY, DESTPROV, PICK_UP_PUNIT, DELIVERY_PUNIT, CHARGES, XCHARGES, DISTANCE, DISTANCE_UNITS, CURRENCY_CODE, PICK_UP_BY, DELIVER_BY  
+FROM TLORDER WHERE "PICK_UP_BY" BETWEEN 'X' AND 'Y';`  
 
 Use the following query to generate the required DRIVERPAY data:  
-SELECT BILL_NUMBER, PAY_ID, DRIVER_ID, PAY_DESCRIPTION, FB_TOTAL_CHARGES, CURRENCY_CODE, TOTAL_PAY_AMT, PAID_DATE, DATE_TRANS  
-FROM DRIVERPAY WHERE "PAID_DATE" BETWEEN 'X' AND 'Y';  
+`SELECT BILL_NUMBER, PAY_ID, DRIVER_ID, PAY_DESCRIPTION, FB_TOTAL_CHARGES, CURRENCY_CODE, TOTAL_PAY_AMT, PAID_DATE, DATE_TRANS  
+FROM DRIVERPAY WHERE "PAID_DATE" BETWEEN 'X' AND 'Y';`  
 
 Replace X and Y with the desired date range in form YYYY-MM-DD.  
 
@@ -112,6 +112,18 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     )
     
     filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
+
+    # Fetch coordinates only for the selected data
+    def filter_and_enrich_city_coordinates(df, city_coords):
+        relevant_origins = df[['ORIGCITY', 'ORIGPROV']].drop_duplicates()
+        relevant_destinations = df[['DESTCITY', 'DESTPROV']].drop_duplicates()
+        relevant_cities = pd.concat([relevant_origins, relevant_destinations]).drop_duplicates()
+        return relevant_cities.merge(city_coords, left_on=["CITY", "PROVINCE"], right_on=["CITY", "PROVINCE"], how="inner")
+    
+    # Filter city_coordinates_df for current month data
+    enriched_coordinates = filter_and_enrich_city_coordinates(filtered_df, city_coordinates_df)
+
+    # Calculate straight-line distance using haversine formula
     filtered_df['Straight Distance'] = calculate_haversine(filtered_df)
 
     punit_options = sorted(filtered_df['PICK_UP_PUNIT'].unique())
@@ -144,7 +156,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
         )[[
-            "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
+            "Route", "BILL_NUMBER", "TOTAL_CHARGE (CAD)", "DISTANCE", "Straight Distance", 
             "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
         ]].rename(columns={
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)", 
