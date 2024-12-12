@@ -43,30 +43,29 @@ def load_city_coordinates():
 
 @st.cache_data
 def remove_duplicates_and_correct(city_coords):
-    # Remove duplicate rows based on city, province, latitude, and longitude
     city_coords = city_coords.drop_duplicates(subset=["CITY", "PROVINCE", "LAT", "LON"], keep="first").reset_index(drop=True)
-
-    # Create a dictionary to consolidate similar city names
-    unique_cities = {}
-    for _, row in city_coords.iterrows():
-        key = (row["PROVINCE"], row["LAT"], row["LON"])
-        if key not in unique_cities:
-            unique_cities[key] = row["CITY"]
-        else:
-            if len(row["CITY"]) > len(unique_cities[key]):
-                unique_cities[key] = row["CITY"]
-
-    for key, city_name in unique_cities.items():
-        city_coords.loc[
-            (city_coords["PROVINCE"] == key[0]) & 
-            (city_coords["LAT"] == key[1]) & 
-            (city_coords["LON"] == key[2]), 
-            "CITY"
-        ] = city_name
-
     return city_coords
 
 @st.cache_data
+def preprocess_tlorder(file):
+    df = pd.read_csv(file, low_memory=False)
+    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
+    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
+    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
+    df['PICK_UP_BY'] = pd.to_datetime(df['PICK_UP_BY'], errors='coerce')
+    df['DELIVER_BY'] = pd.to_datetime(df['DELIVER_BY'], errors='coerce')
+    return df
+
+@st.cache_data
+def preprocess_driverpay(file):
+    df = pd.read_csv(file, low_memory=False)
+    df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
+    driver_pay_agg = df.groupby('BILL_NUMBER').agg({
+        'TOTAL_PAY_AMT': 'sum',
+        'DRIVER_ID': 'first'
+    }).reset_index()
+    return driver_pay_agg
+
 def correct_misspellings(df, city_coords, city_column, province_column):
     corrected_cities = []
     corrected_provinces = []
@@ -93,55 +92,38 @@ def correct_misspellings(df, city_coords, city_column, province_column):
     df[province_column] = corrected_provinces
     return df, missing_locations
 
-@st.cache_data
-def preprocess_tlorder(file, city_coords):
-    df = pd.read_csv(file, low_memory=False)
+def filter_and_correct_data(tlorder_df, selected_punit, selected_month, city_coords):
+    filtered_df = tlorder_df[
+        (tlorder_df['PICK_UP_PUNIT'] == selected_punit) &
+        (tlorder_df['PICK_UP_BY'].dt.to_period('M') == selected_month)
+    ].copy()
 
-    # Correct misspellings in origin and destination
-    df, origin_missing = correct_misspellings(df, city_coords, "ORIGCITY", "ORIGPROV")
-    df, destination_missing = correct_misspellings(df, city_coords, "DESTCITY", "DESTPROV")
+    # Correct misspellings for the filtered data
+    filtered_df, missing_locations = correct_misspellings(filtered_df, city_coords, "ORIGCITY", "ORIGPROV")
+    filtered_df, destination_missing = correct_misspellings(filtered_df, city_coords, "DESTCITY", "DESTPROV")
 
-    missing_locations = set(origin_missing + destination_missing)
-
-    # Merge for origins
-    origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
-    df = df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
-
-    # Merge for destinations
-    dest_coords = city_coords.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
-    df = df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
-
-    return df, missing_locations
-
-@st.cache_data
-def preprocess_driverpay(file):
-    df = pd.read_csv(file, low_memory=False)
-    df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
-    driver_pay_agg = df.groupby('BILL_NUMBER').agg({
-        'TOTAL_PAY_AMT': 'sum',
-        'DRIVER_ID': 'first'
-    }).reset_index()
-    return driver_pay_agg
-
-@st.cache_data
-def calculate_haversine(df):
-    R = 3958.8
-    lat1, lon1 = np.radians(df['ORIG_LAT']), np.radians(df['ORIG_LON'])
-    lat2, lon2 = np.radians(df['DEST_LAT']), np.radians(df['DEST_LON'])
-    dlat, dlon = lat2 - lat1, lon2 - lon1
-
-    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    return R * c
+    missing_locations += destination_missing
+    return filtered_df, missing_locations
 
 if uploaded_tlorder_file and uploaded_driverpay_file:
     city_coordinates_df = load_city_coordinates()
     city_coordinates_df = remove_duplicates_and_correct(city_coordinates_df)
 
-    tlorder_df, missing_locations = preprocess_tlorder(uploaded_tlorder_file, city_coordinates_df)
+    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
 
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
+
+    # Filter for user selection
+    punit_options = sorted(tlorder_df['PICK_UP_PUNIT'].unique())
+    selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
+
+    months = sorted(tlorder_df['PICK_UP_BY'].dt.to_period('M').unique())
+    selected_month = st.selectbox("Select Month:", options=months)
+
+    filtered_df, missing_locations = filter_and_correct_data(
+        tlorder_df, selected_punit, selected_month, city_coordinates_df
+    )
 
     if missing_locations:
         st.warning(f"The following locations could not be matched: {', '.join([f'{city}, {prov}' for city, prov in missing_locations])}")
