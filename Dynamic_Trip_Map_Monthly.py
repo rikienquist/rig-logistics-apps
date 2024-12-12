@@ -43,11 +43,44 @@ def load_city_coordinates():
 @st.cache_data
 def preprocess_tlorder(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
+    
+    # Standardize city and province names to uppercase in both datasets
+    city_coords['CITY'] = city_coords['CITY'].str.strip().str.upper()
+    city_coords['PROVINCE'] = city_coords['PROVINCE'].str.strip().str.upper()
+    
+    df['ORIGCITY'] = df['ORIGCITY'].str.strip().str.upper()
+    df['ORIGPROV'] = df['ORIGPROV'].str.strip().str.upper()
+    df['DESTCITY'] = df['DESTCITY'].str.strip().str.upper()
+    df['DESTPROV'] = df['DESTPROV'].str.strip().str.upper()
+    
+    # Merge for origins
     origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
     df = df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
+    
+    # Merge for destinations
     dest_coords = city_coords.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
     df = df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
+    
     return df
+
+@st.cache_data
+def filter_and_enrich_city_coordinates(df, city_coords):
+    # Standardize city and province names to uppercase
+    city_coords['CITY'] = city_coords['CITY'].str.strip().str.upper()
+    city_coords['PROVINCE'] = city_coords['PROVINCE'].str.strip().str.upper()
+
+    # Combine unique origins and destinations into a single DataFrame
+    relevant_origins = df[['ORIGCITY', 'ORIGPROV']].drop_duplicates()
+    relevant_origins.rename(columns={"ORIGCITY": "CITY", "ORIGPROV": "PROVINCE"}, inplace=True)
+
+    relevant_destinations = df[['DESTCITY', 'DESTPROV']].drop_duplicates()
+    relevant_destinations.rename(columns={"DESTCITY": "CITY", "DESTPROV": "PROVINCE"}, inplace=True)
+
+    relevant_cities = pd.concat([relevant_origins, relevant_destinations]).drop_duplicates()
+
+    # Merge with city_coords to get coordinates for relevant cities
+    enriched_cities = relevant_cities.merge(city_coords, on=["CITY", "PROVINCE"], how="left")
+    return enriched_cities
 
 @st.cache_data
 def preprocess_driverpay(file):
