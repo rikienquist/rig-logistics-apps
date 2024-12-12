@@ -167,7 +167,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
         )[[
             "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
-            "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
+            "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date", "Highlight"
         ]].rename(columns={
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)", 
             "DISTANCE": "Distance (miles)", 
