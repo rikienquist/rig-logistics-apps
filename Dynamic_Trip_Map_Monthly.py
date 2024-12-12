@@ -13,12 +13,12 @@ st.title("Trip Map Viewer by Month")
 st.markdown("""
 ### Instructions:
 Use the following query to generate the required TLORDER data:  
-`SELECT BILL_NUMBER, DETAIL_LINE_ID, CALLNAME, ORIGCITY, ORIGPROV, DESTCITY, DESTPROV, PICK_UP_PUNIT, DELIVERY_PUNIT, CHARGES, XCHARGES, DISTANCE, DISTANCE_UNITS, CURRENCY_CODE, PICK_UP_BY, DELIVER_BY  
-FROM TLORDER WHERE "PICK_UP_BY" BETWEEN 'X' AND 'Y';`  
+SELECT BILL_NUMBER, DETAIL_LINE_ID, CALLNAME, ORIGCITY, ORIGPROV, DESTCITY, DESTPROV, PICK_UP_PUNIT, DELIVERY_PUNIT, CHARGES, XCHARGES, DISTANCE, DISTANCE_UNITS, CURRENCY_CODE, PICK_UP_BY, DELIVER_BY  
+FROM TLORDER WHERE "PICK_UP_BY" BETWEEN 'X' AND 'Y';  
 
 Use the following query to generate the required DRIVERPAY data:  
-`SELECT BILL_NUMBER, PAY_ID, DRIVER_ID, PAY_DESCRIPTION, FB_TOTAL_CHARGES, CURRENCY_CODE, TOTAL_PAY_AMT, PAID_DATE, DATE_TRANS  
-FROM DRIVERPAY WHERE "PAID_DATE" BETWEEN 'X' AND 'Y';`  
+SELECT BILL_NUMBER, PAY_ID, DRIVER_ID, PAY_DESCRIPTION, FB_TOTAL_CHARGES, CURRENCY_CODE, TOTAL_PAY_AMT, PAID_DATE, DATE_TRANS  
+FROM DRIVERPAY WHERE "PAID_DATE" BETWEEN 'X' AND 'Y';  
 
 Replace X and Y with the desired date range in form YYYY-MM-DD.  
 
@@ -29,7 +29,26 @@ Save the query results as CSV files and upload them below to visualize the data.
 uploaded_tlorder_file = st.file_uploader("Upload TLORDER CSV file", type="csv")
 uploaded_driverpay_file = st.file_uploader("Upload DRIVERPAY CSV file", type="csv")
 
-# Optimized function to preprocess DRIVERPAY data
+@st.cache_data
+def load_city_coordinates():
+    city_coords = pd.read_csv("trip_map_data/city_coordinates.csv")
+    city_coords.rename(columns={
+        "city": "CITY",
+        "province": "PROVINCE",
+        "latitude": "LAT",
+        "longitude": "LON"
+    }, inplace=True)
+    return city_coords
+
+@st.cache_data
+def preprocess_tlorder(file, city_coords):
+    df = pd.read_csv(file, low_memory=False)
+    origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
+    df = df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
+    dest_coords = city_coords.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
+    df = df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
+    return df
+
 @st.cache_data
 def preprocess_driverpay(file):
     df = pd.read_csv(file, low_memory=False)
@@ -40,32 +59,9 @@ def preprocess_driverpay(file):
     }).reset_index()
     return driver_pay_agg
 
-# Optimized function to preprocess TLORDER data
-@st.cache_data
-def preprocess_tlorder(file):
-    return pd.read_csv(file, low_memory=False)
-
-# Optimized function to filter city coordinates for the current dataset
-@st.cache_data
-def filter_city_coordinates(city_coords_file, cities_to_filter):
-    city_coords = pd.read_csv(city_coords_file)
-    city_coords.rename(columns={
-        "city": "CITY",
-        "province": "PROVINCE",
-        "latitude": "LAT",
-        "longitude": "LON"
-    }, inplace=True)
-    # Only keep the cities and provinces relevant for the current view
-    filtered_coords = city_coords[
-        (city_coords['CITY'].isin(cities_to_filter['ORIGCITY'])) |
-        (city_coords['CITY'].isin(cities_to_filter['DESTCITY']))
-    ]
-    return filtered_coords
-
-# Function to calculate haversine distance
 @st.cache_data
 def calculate_haversine(df):
-    R = 3958.8  # Earth's radius in miles
+    R = 3958.8
     lat1, lon1 = np.radians(df['ORIG_LAT']), np.radians(df['ORIG_LON'])
     lat2, lon2 = np.radians(df['DEST_LAT']), np.radians(df['DEST_LON'])
     dlat, dlon = lat2 - lat1, lon2 - lon1
@@ -75,13 +71,18 @@ def calculate_haversine(df):
     return R * c
 
 if uploaded_tlorder_file and uploaded_driverpay_file:
-    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+    city_coordinates_df = load_city_coordinates()
+    tlorder_df = preprocess_tlorder(uploaded_tlorder_file, city_coordinates_df)
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
 
-    # Combine TLORDER and DRIVERPAY data
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-    # Calculate total charges in CAD
+    tlorder_df = tlorder_df[
+        (tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
+        (pd.notna(tlorder_df['ORIG_LAT'])) &
+        (pd.notna(tlorder_df['DEST_LAT']))
+    ].copy()
+
     exchange_rate = 1.38
     tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce')
     tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce')
@@ -91,52 +92,36 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         tlorder_df['CHARGES'] + tlorder_df['XCHARGES']
     )
 
-    # Filter valid routes
-    tlorder_df = tlorder_df[
-        (tlorder_df['TOTAL_CHARGE_CAD'] != 0) &
+    filtered_df = tlorder_df[
+        (tlorder_df['TOTAL_CHARGE_CAD'] != 0) & 
         (tlorder_df['DISTANCE'] != 0)
     ].copy()
 
-    # Ensure `PICK_UP_PUNIT` is clean
-    tlorder_df['PICK_UP_PUNIT'] = tlorder_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
+    filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
+    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
+    filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
-    # Calculate Revenue per Mile and Profit
-    tlorder_df['Revenue per Mile'] = tlorder_df['TOTAL_CHARGE_CAD'] / tlorder_df['DISTANCE']
-    tlorder_df['Profit (CAD)'] = tlorder_df['TOTAL_CHARGE_CAD'] - tlorder_df['TOTAL_PAY_AMT']
-
-    # Calculate effective date
     cutoff_date = pd.Timestamp("2024-10-01")
-    tlorder_df['Effective_Date'] = pd.to_datetime(
+    filtered_df['Effective_Date'] = pd.to_datetime(
         np.where(
-            pd.to_datetime(tlorder_df['DELIVER_BY'], errors='coerce') >= cutoff_date,
-            tlorder_df['DELIVER_BY'],
-            tlorder_df['PICK_UP_BY']
+            pd.to_datetime(filtered_df['DELIVER_BY'], errors='coerce') >= cutoff_date,
+            filtered_df['DELIVER_BY'],
+            filtered_df['PICK_UP_BY']
         ),
         errors='coerce'
     )
+    
+    filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
+    filtered_df['Straight Distance'] = calculate_haversine(filtered_df)
 
-    # Filter city coordinates for the relevant cities in the current TLORDER data
-    relevant_cities = tlorder_df[['ORIGCITY', 'DESTCITY']].drop_duplicates()
-    city_coordinates_df = filter_city_coordinates("trip_map_data/city_coordinates.csv", relevant_cities)
-
-    # Merge filtered coordinates with TLORDER data
-    origin_coords = city_coordinates_df.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
-    dest_coords = city_coordinates_df.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
-    tlorder_df = tlorder_df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
-    tlorder_df = tlorder_df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
-
-    # Calculate straight-line distance
-    tlorder_df['Straight Distance'] = calculate_haversine(tlorder_df)
-
-    # Filter data for specific PUNIT and Driver ID
-    punit_options = sorted(tlorder_df['PICK_UP_PUNIT'].unique())
+    punit_options = sorted(filtered_df['PICK_UP_PUNIT'].unique())
     selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
-    filtered_df = tlorder_df[tlorder_df['PICK_UP_PUNIT'] == selected_punit].copy()
-
-    driver_options = ["All"] + sorted(filtered_df['DRIVER_ID'].dropna().unique().astype(str))
+    relevant_drivers = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]['DRIVER_ID'].unique()
+    driver_options = ["All"] + sorted(relevant_drivers.astype(str))
     selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
+    filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit].copy()
     if selected_driver != "All":
-        filtered_df = filtered_df[filtered_df['DRIVER_ID'] == selected_driver]
+        filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
 
     months = sorted(filtered_view['Month'].unique())
     if len(months) == 0:
