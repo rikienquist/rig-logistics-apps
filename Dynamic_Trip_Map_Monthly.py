@@ -112,6 +112,26 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     )
     
     filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
+
+    # Fetch coordinates only for the selected data
+    def filter_and_enrich_city_coordinates(df, city_coords):
+        # Combine unique origins and destinations into a single DataFrame
+        relevant_origins = df[['ORIGCITY', 'ORIGPROV']].drop_duplicates()
+        relevant_origins.rename(columns={"ORIGCITY": "CITY", "ORIGPROV": "PROVINCE"}, inplace=True)
+        
+        relevant_destinations = df[['DESTCITY', 'DESTPROV']].drop_duplicates()
+        relevant_destinations.rename(columns={"DESTCITY": "CITY", "DESTPROV": "PROVINCE"}, inplace=True)
+        
+        relevant_cities = pd.concat([relevant_origins, relevant_destinations]).drop_duplicates()
+        
+        # Merge with city_coords to get coordinates for relevant cities
+        enriched_cities = relevant_cities.merge(city_coords, on=["CITY", "PROVINCE"], how="inner")
+        return enriched_cities
+    
+    # Filter city_coordinates_df for current month data
+    enriched_coordinates = filter_and_enrich_city_coordinates(filtered_df, city_coordinates_df)
+
+    # Calculate straight-line distance using haversine formula
     filtered_df['Straight Distance'] = calculate_haversine(filtered_df)
 
     punit_options = sorted(filtered_df['PICK_UP_PUNIT'].unique())
@@ -134,13 +154,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     if not month_data.empty:
-        month_data['Highlight'] = (
-            month_data['Effective_Date'].dt.date != month_data['Effective_Date'].dt.date.shift()
-        ).cumsum() % 2
-
+        # Group rows by day and alternate colors
+        month_data['Day_Group'] = month_data['Effective_Date'].dt.date  # Extract the date part
+        day_colors = {day: idx % 2 for idx, day in enumerate(month_data['Day_Group'].unique())}  # Assign alternating colors
+        month_data['Highlight'] = month_data['Day_Group'].map(day_colors)
+    
+        # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
         month_data = month_data.sort_values(by='Effective_Date')  # Ensure sorting by Effective_Date
-
+    
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
         )[[
@@ -152,7 +174,8 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Straight Distance": "Straight Distance (miles)", 
             "TOTAL_PAY_AMT": "Driver Pay (CAD)"
         })
-
+    
+        # Calculate grand totals
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
             "BILL_NUMBER": "",
@@ -165,29 +188,33 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
             "Effective_Date": ""
         }])
-
+    
+        # Append grand totals to the route summary table
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-
+    
+        # Format currency columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-
+    
+        # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
-                return ['background-color: #f7c8c8'] * len(row)
-            elif pd.notna(row['Effective_Date']):
-                return ['background-color: #c8e0f7' if row['Effective_Date'] in month_data[month_data['Highlight'] == 1]['Effective_Date'].values 
-                        else 'background-color: #f7f7c8'] * len(row)
+                return ['background-color: #f7c8c8'] * len(row)  # Highlight grand totals in red
+            elif row['Highlight'] == 1:
+                return ['background-color: #c8e0f7'] * len(row)  # One color for odd groups
             else:
-                return ['background-color: white'] * len(row)
-
+                return ['background-color: #f7f7c8'] * len(row)  # Another color for even groups
+    
+        # Apply styling and display the DataFrame
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
-
+    
+        # Generate the map
         fig = go.Figure()
-
+    
         # Sequential numbering logic for origin and destination
         city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
         label_counter = 1
@@ -262,7 +289,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
-
+    
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
 else:
