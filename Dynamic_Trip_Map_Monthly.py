@@ -45,10 +45,11 @@ def load_city_coordinates():
 def preprocess_tlorder(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
     
-    # Clean and standardize city and province names
+    # Define a function to clean city names (keep letters, spaces only)
     def clean_city_name(name):
-        return re.sub(r"[^a-zA-Z\s\-.]", "", str(name)).strip().upper()
+        return re.sub(r"[^a-zA-Z\s]", "", str(name)).strip().upper()
 
+    # Clean and standardize city and province names to uppercase in both datasets
     city_coords['CITY'] = city_coords['CITY'].apply(clean_city_name)
     city_coords['PROVINCE'] = city_coords['PROVINCE'].str.strip().str.upper()
     
@@ -57,9 +58,8 @@ def preprocess_tlorder(file, city_coords):
     df['DESTCITY'] = df['DESTCITY'].apply(clean_city_name)
     df['DESTPROV'] = df['DESTPROV'].str.strip().str.upper()
 
-    # Ensure latitude and longitude are numeric
-    city_coords['LAT'] = pd.to_numeric(city_coords['LAT'], errors='coerce')
-    city_coords['LON'] = pd.to_numeric(city_coords['LON'], errors='coerce')
+    # Ensure there are no duplicates in city_coords after cleaning
+    city_coords = city_coords.drop_duplicates(subset=['CITY', 'PROVINCE'])
 
     # Merge for origins
     origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
@@ -110,30 +110,14 @@ def preprocess_driverpay(file):
 
 @st.cache_data
 def calculate_haversine(df):
-    # Ensure latitude and longitude are numeric
-    df['ORIG_LAT'] = pd.to_numeric(df['ORIG_LAT'], errors='coerce')
-    df['ORIG_LON'] = pd.to_numeric(df['ORIG_LON'], errors='coerce')
-    df['DEST_LAT'] = pd.to_numeric(df['DEST_LAT'], errors='coerce')
-    df['DEST_LON'] = pd.to_numeric(df['DEST_LON'], errors='coerce')
-
-    # Use only rows with valid numeric lat/lon for calculation
-    valid_rows = df.dropna(subset=['ORIG_LAT', 'ORIG_LON', 'DEST_LAT', 'DEST_LON'])
-
-    R = 3958.8  # Earth's radius in miles
-    lat1, lon1 = np.radians(valid_rows['ORIG_LAT']), np.radians(valid_rows['ORIG_LON'])
-    lat2, lon2 = np.radians(valid_rows['DEST_LAT']), np.radians(valid_rows['DEST_LON'])
+    R = 3958.8
+    lat1, lon1 = np.radians(df['ORIG_LAT']), np.radians(df['ORIG_LON'])
+    lat2, lon2 = np.radians(df['DEST_LAT']), np.radians(df['DEST_LON'])
     dlat, dlon = lat2 - lat1, lon2 - lon1
 
     a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-
-    distances = R * c
-
-    # Assign distances back to the original DataFrame
-    df['Straight Distance'] = np.nan  # Default as NaN
-    df.loc[valid_rows.index, 'Straight Distance'] = distances
-
-    return df
+    return R * c
 
 if uploaded_tlorder_file and uploaded_driverpay_file:
     city_coordinates_df = load_city_coordinates()
