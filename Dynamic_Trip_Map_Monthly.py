@@ -115,10 +115,18 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
     # Fetch coordinates only for the selected data
     def filter_and_enrich_city_coordinates(df, city_coords):
+        # Combine unique origins and destinations into a single DataFrame
         relevant_origins = df[['ORIGCITY', 'ORIGPROV']].drop_duplicates()
+        relevant_origins.rename(columns={"ORIGCITY": "CITY", "ORIGPROV": "PROVINCE"}, inplace=True)
+        
         relevant_destinations = df[['DESTCITY', 'DESTPROV']].drop_duplicates()
+        relevant_destinations.rename(columns={"DESTCITY": "CITY", "DESTPROV": "PROVINCE"}, inplace=True)
+        
         relevant_cities = pd.concat([relevant_origins, relevant_destinations]).drop_duplicates()
-        return relevant_cities.merge(city_coords, left_on=["CITY", "PROVINCE"], right_on=["CITY", "PROVINCE"], how="inner")
+        
+        # Merge with city_coords to get coordinates for relevant cities
+        enriched_cities = relevant_cities.merge(city_coords, on=["CITY", "PROVINCE"], how="inner")
+        return enriched_cities
     
     # Filter city_coordinates_df for current month data
     enriched_coordinates = filter_and_enrich_city_coordinates(filtered_df, city_coordinates_df)
