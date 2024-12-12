@@ -2,6 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
+import re
 
 # Initialize global variables for navigation
 if "month_index" not in st.session_state:
@@ -44,13 +45,17 @@ def load_city_coordinates():
 def preprocess_tlorder(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
     
-    # Standardize city and province names to uppercase in both datasets
-    city_coords['CITY'] = city_coords['CITY'].str.strip().str.upper()
+    # Define a function to clean city names (keep letters, spaces only)
+    def clean_city_name(name):
+        return re.sub(r"[^a-zA-Z\s]", "", str(name)).strip().upper()
+
+    # Clean and standardize city and province names to uppercase in both datasets
+    city_coords['CITY'] = city_coords['CITY'].apply(clean_city_name)
     city_coords['PROVINCE'] = city_coords['PROVINCE'].str.strip().str.upper()
     
-    df['ORIGCITY'] = df['ORIGCITY'].str.strip().str.upper()
+    df['ORIGCITY'] = df['ORIGCITY'].apply(clean_city_name)
     df['ORIGPROV'] = df['ORIGPROV'].str.strip().str.upper()
-    df['DESTCITY'] = df['DESTCITY'].str.strip().str.upper()
+    df['DESTCITY'] = df['DESTCITY'].apply(clean_city_name)
     df['DESTPROV'] = df['DESTPROV'].str.strip().str.upper()
     
     # Merge for origins
@@ -65,8 +70,12 @@ def preprocess_tlorder(file, city_coords):
 
 @st.cache_data
 def filter_and_enrich_city_coordinates(df, city_coords):
-    # Standardize city and province names to uppercase
-    city_coords['CITY'] = city_coords['CITY'].str.strip().str.upper()
+    # Define a function to clean city names (keep letters, spaces only)
+    def clean_city_name(name):
+        return re.sub(r"[^a-zA-Z\s]", "", str(name)).strip().upper()
+
+    # Clean and standardize city and province names to uppercase
+    city_coords['CITY'] = city_coords['CITY'].apply(clean_city_name)
     city_coords['PROVINCE'] = city_coords['PROVINCE'].str.strip().str.upper()
 
     # Combine unique origins and destinations into a single DataFrame
