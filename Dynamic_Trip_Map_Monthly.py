@@ -47,7 +47,7 @@ def preprocess_tlorder(file, city_coords):
     
     # Define a function to clean city names (keep letters, spaces only)
     def clean_city_name(name):
-        return re.sub(r"[^a-zA-Z\s]", "", str(name)).strip().upper()
+        return re.sub(r"[^a-zA-Z\s\-.]", "", str(name)).strip().upper()
 
     # Clean and standardize city and province names to uppercase in both datasets
     city_coords['CITY'] = city_coords['CITY'].apply(clean_city_name)
