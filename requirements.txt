@@ -4,3 +4,4 @@ plotly
 openpyxl
 geopy
 streamlit
+fuzzywuzzy
