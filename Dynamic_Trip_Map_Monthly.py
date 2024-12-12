@@ -2,7 +2,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
-from fuzzywuzzy import process, fuzz  # For fuzzy matching
 
 # Initialize global variables for navigation
 if "month_index" not in st.session_state:
@@ -30,32 +29,7 @@ Save the query results as CSV files and upload them below to visualize the data.
 uploaded_tlorder_file = st.file_uploader("Upload TLORDER CSV file", type="csv")
 uploaded_driverpay_file = st.file_uploader("Upload DRIVERPAY CSV file", type="csv")
 
-@st.cache_data
-def load_city_coordinates():
-    city_coords = pd.read_csv("trip_map_data/city_coordinates.csv")
-    city_coords.rename(columns={
-        "city": "CITY",
-        "province": "PROVINCE",
-        "latitude": "LAT",
-        "longitude": "LON"
-    }, inplace=True)
-    return city_coords
-
-@st.cache_data
-def remove_duplicates_and_correct(city_coords):
-    city_coords = city_coords.drop_duplicates(subset=["CITY", "PROVINCE", "LAT", "LON"], keep="first").reset_index(drop=True)
-    return city_coords
-
-@st.cache_data
-def preprocess_tlorder(file):
-    df = pd.read_csv(file, low_memory=False)
-    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
-    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
-    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
-    df['PICK_UP_BY'] = pd.to_datetime(df['PICK_UP_BY'], errors='coerce')
-    df['DELIVER_BY'] = pd.to_datetime(df['DELIVER_BY'], errors='coerce')
-    return df
-
+# Optimized function to preprocess DRIVERPAY data
 @st.cache_data
 def preprocess_driverpay(file):
     df = pd.read_csv(file, low_memory=False)
@@ -66,80 +40,48 @@ def preprocess_driverpay(file):
     }).reset_index()
     return driver_pay_agg
 
-def correct_misspellings(df, city_coords, city_column, province_column):
-    corrected_cities = []
-    corrected_provinces = []
-    missing_locations = []
+# Optimized function to preprocess TLORDER data
+@st.cache_data
+def preprocess_tlorder(file):
+    return pd.read_csv(file, low_memory=False)
 
-    for _, row in df.iterrows():
-        city, province = row[city_column], row[province_column]
+# Optimized function to filter city coordinates for the current dataset
+@st.cache_data
+def filter_city_coordinates(city_coords_file, cities_to_filter):
+    city_coords = pd.read_csv(city_coords_file)
+    city_coords.rename(columns={
+        "city": "CITY",
+        "province": "PROVINCE",
+        "latitude": "LAT",
+        "longitude": "LON"
+    }, inplace=True)
+    # Only keep the cities and provinces relevant for the current view
+    filtered_coords = city_coords[
+        (city_coords['CITY'].isin(cities_to_filter['ORIGCITY'])) |
+        (city_coords['CITY'].isin(cities_to_filter['DESTCITY']))
+    ]
+    return filtered_coords
 
-        matched_city = process.extractOne(city, city_coords["CITY"], scorer=fuzz.WRatio)
-        matched_province = process.extractOne(province, city_coords["PROVINCE"], scorer=fuzz.WRatio)
+# Function to calculate haversine distance
+@st.cache_data
+def calculate_haversine(df):
+    R = 3958.8  # Earth's radius in miles
+    lat1, lon1 = np.radians(df['ORIG_LAT']), np.radians(df['ORIG_LON'])
+    lat2, lon2 = np.radians(df['DEST_LAT']), np.radians(df['DEST_LON'])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
 
-        if matched_city and matched_city[1] >= 85:
-            corrected_cities.append(matched_city[0])
-        else:
-            corrected_cities.append(city)
-            missing_locations.append((city, province))
-
-        if matched_province and matched_province[1] >= 85:
-            corrected_provinces.append(matched_province[0])
-        else:
-            corrected_provinces.append(province)
-
-    df[city_column] = corrected_cities
-    df[province_column] = corrected_provinces
-    return df, missing_locations
-
-def filter_and_correct_data(tlorder_df, selected_punit, selected_month, city_coords):
-    filtered_df = tlorder_df[
-        (tlorder_df['PICK_UP_PUNIT'] == selected_punit) &
-        (tlorder_df['PICK_UP_BY'].dt.to_period('M') == selected_month)
-    ].copy()
-
-    # Correct misspellings for the filtered data
-    filtered_df, missing_locations = correct_misspellings(filtered_df, city_coords, "ORIGCITY", "ORIGPROV")
-    filtered_df, destination_missing = correct_misspellings(filtered_df, city_coords, "DESTCITY", "DESTPROV")
-
-    missing_locations += destination_missing
-    return filtered_df, missing_locations
+    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
 
 if uploaded_tlorder_file and uploaded_driverpay_file:
-    city_coordinates_df = load_city_coordinates()
-    city_coordinates_df = remove_duplicates_and_correct(city_coordinates_df)
-
     tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
 
+    # Combine TLORDER and DRIVERPAY data
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
-    # Ensure `PICK_UP_PUNIT` is uniformly a string
-    tlorder_df['PICK_UP_PUNIT'] = tlorder_df['PICK_UP_PUNIT'].astype(str)
-
-    # Filter for user selection
-    punit_options = sorted(tlorder_df['PICK_UP_PUNIT'].unique())
-    selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
-
-    # Ensure `PICK_UP_BY` is in datetime format for filtering
-    tlorder_df['PICK_UP_BY'] = pd.to_datetime(tlorder_df['PICK_UP_BY'], errors='coerce')
-
-    months = sorted(tlorder_df['PICK_UP_BY'].dt.to_period('M').dropna().unique())
-    selected_month = st.selectbox("Select Month:", options=months)
-
-    filtered_df, missing_locations = filter_and_correct_data(
-        tlorder_df, selected_punit, selected_month, city_coordinates_df
-    )
-
-    if missing_locations:
-        st.warning(f"The following locations could not be matched: {', '.join([f'{city}, {prov}' for city, prov in missing_locations])}")
-
-    tlorder_df = tlorder_df[
-        (tlorder_df['ORIGCITY'] != tlorder_df['DESTCITY']) &
-        (pd.notna(tlorder_df['ORIG_LAT'])) &
-        (pd.notna(tlorder_df['DEST_LAT']))
-    ].copy()
-
+    # Calculate total charges in CAD
     exchange_rate = 1.38
     tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce')
     tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce')
@@ -149,36 +91,52 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         tlorder_df['CHARGES'] + tlorder_df['XCHARGES']
     )
 
-    filtered_df = tlorder_df[
-        (tlorder_df['TOTAL_CHARGE_CAD'] != 0) & 
+    # Filter valid routes
+    tlorder_df = tlorder_df[
+        (tlorder_df['TOTAL_CHARGE_CAD'] != 0) &
         (tlorder_df['DISTANCE'] != 0)
     ].copy()
 
-    filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
-    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
-    filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
+    # Ensure `PICK_UP_PUNIT` is clean
+    tlorder_df['PICK_UP_PUNIT'] = tlorder_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
 
+    # Calculate Revenue per Mile and Profit
+    tlorder_df['Revenue per Mile'] = tlorder_df['TOTAL_CHARGE_CAD'] / tlorder_df['DISTANCE']
+    tlorder_df['Profit (CAD)'] = tlorder_df['TOTAL_CHARGE_CAD'] - tlorder_df['TOTAL_PAY_AMT']
+
+    # Calculate effective date
     cutoff_date = pd.Timestamp("2024-10-01")
-    filtered_df['Effective_Date'] = pd.to_datetime(
+    tlorder_df['Effective_Date'] = pd.to_datetime(
         np.where(
-            pd.to_datetime(filtered_df['DELIVER_BY'], errors='coerce') >= cutoff_date,
-            filtered_df['DELIVER_BY'],
-            filtered_df['PICK_UP_BY']
+            pd.to_datetime(tlorder_df['DELIVER_BY'], errors='coerce') >= cutoff_date,
+            tlorder_df['DELIVER_BY'],
+            tlorder_df['PICK_UP_BY']
         ),
         errors='coerce'
     )
-    
-    filtered_df['Month'] = filtered_df['Effective_Date'].dt.to_period('M')
-    filtered_df['Straight Distance'] = calculate_haversine(filtered_df)
 
-    punit_options = sorted(filtered_df['PICK_UP_PUNIT'].unique())
+    # Filter city coordinates for the relevant cities in the current TLORDER data
+    relevant_cities = tlorder_df[['ORIGCITY', 'DESTCITY']].drop_duplicates()
+    city_coordinates_df = filter_city_coordinates("trip_map_data/city_coordinates.csv", relevant_cities)
+
+    # Merge filtered coordinates with TLORDER data
+    origin_coords = city_coordinates_df.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
+    dest_coords = city_coordinates_df.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
+    tlorder_df = tlorder_df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
+    tlorder_df = tlorder_df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
+
+    # Calculate straight-line distance
+    tlorder_df['Straight Distance'] = calculate_haversine(tlorder_df)
+
+    # Filter data for specific PUNIT and Driver ID
+    punit_options = sorted(tlorder_df['PICK_UP_PUNIT'].unique())
     selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
-    relevant_drivers = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit]['DRIVER_ID'].unique()
-    driver_options = ["All"] + sorted(relevant_drivers.astype(str))
+    filtered_df = tlorder_df[tlorder_df['PICK_UP_PUNIT'] == selected_punit].copy()
+
+    driver_options = ["All"] + sorted(filtered_df['DRIVER_ID'].dropna().unique().astype(str))
     selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
-    filtered_view = filtered_df[filtered_df['PICK_UP_PUNIT'] == selected_punit].copy()
     if selected_driver != "All":
-        filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
+        filtered_df = filtered_df[filtered_df['DRIVER_ID'] == selected_driver]
 
     months = sorted(filtered_view['Month'].unique())
     if len(months) == 0:
