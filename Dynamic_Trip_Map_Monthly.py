@@ -154,17 +154,27 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     if not month_data.empty:
-        # Ensure sorting by Effective_Date to maintain order
-        month_data = month_data.sort_values(by='Effective_Date')
-    
-        # Assign a unique group for each day and alternate colors
+        # Group rows by day and assign alternating colors
         month_data['Day_Group'] = month_data['Effective_Date'].dt.date  # Extract only the date part
         unique_days = list(month_data['Day_Group'].unique())  # Get unique dates in the order they appear
         day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}  # Alternating colors: 0 or 1
         month_data['Highlight'] = month_data['Day_Group'].map(day_colors)  # Map each day to its alternating color
     
+        # Identify cities missing coordinates
+        missing_origins = month_data[month_data['ORIG_LAT'].isna()][['ORIGCITY', 'ORIGPROV']].drop_duplicates()
+        missing_destinations = month_data[month_data['DEST_LAT'].isna()][['DESTCITY', 'DESTPROV']].drop_duplicates()
+    
+        missing_cities = pd.concat([
+            missing_origins.rename(columns={"ORIGCITY": "City", "ORIGPROV": "Province"}),
+            missing_destinations.rename(columns={"DESTCITY": "City", "DESTPROV": "Province"})
+        ]).drop_duplicates()
+    
+        # Replace missing Straight Distance with None
+        month_data['Straight Distance'] = month_data['Straight Distance'].fillna(None)
+    
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
+        month_data = month_data.sort_values(by='Effective_Date')  # Ensure sorting by Effective_Date
     
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
@@ -184,7 +194,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "BILL_NUMBER": "",
             "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
             "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
-            "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
+            "Straight Distance (miles)": None,  # Grand totals cannot sum Straight Distance
             "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
             if route_summary_df["Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
@@ -227,18 +237,18 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             label_counter += 1
             city_sequence[row['DESTCITY']].append(label_counter)
             label_counter += 1
-        
+    
         # Track if legend entries have been added
         legend_added = {"Origin": False, "Destination": False, "Route": False}
-        
+    
         for _, row in month_data.iterrows():
             origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
             destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
-        
+    
             # Add origin marker
             fig.add_trace(go.Scattergeo(
-                lon=[row['ORIG_LON']],
-                lat=[row['ORIG_LAT']],
+                lon=[row['ORIG_LON']] if pd.notna(row['ORIG_LON']) else [None],
+                lat=[row['ORIG_LAT']] if pd.notna(row['ORIG_LAT']) else [None],
                 mode="markers+text",
                 marker=dict(size=8, color="blue"),
                 text=origin_sequence,
@@ -246,19 +256,19 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                           f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
-                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
                            f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-        
+    
             # Add destination marker
             fig.add_trace(go.Scattergeo(
-                lon=[row['DEST_LON']],
-                lat=[row['DEST_LAT']],
+                lon=[row['DEST_LON']] if pd.notna(row['DEST_LON']) else [None],
+                lat=[row['DEST_LAT']] if pd.notna(row['DEST_LAT']) else [None],
                 mode="markers+text",
                 marker=dict(size=8, color="red"),
                 text=destination_sequence,
@@ -266,27 +276,28 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
                 hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                           f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
                            f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
-                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
                            f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-        
+    
             # Add route line
-            fig.add_trace(go.Scattergeo(
-                lon=[row['ORIG_LON'], row['DEST_LON']],
-                lat=[row['ORIG_LAT'], row['DEST_LAT']],
-                mode="lines",
-                line=dict(width=2, color="green"),
-                name="Route" if not legend_added["Route"] else None,
-                hoverinfo="skip",
-                showlegend=not legend_added["Route"]
-            ))
+            if pd.notna(row['ORIG_LAT']) and pd.notna(row['DEST_LAT']):
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['ORIG_LON'], row['DEST_LON']],
+                    lat=[row['ORIG_LAT'], row['DEST_LAT']],
+                    mode="lines",
+                    line=dict(width=2, color="green"),
+                    name="Route" if not legend_added["Route"] else None,
+                    hoverinfo="skip",
+                    showlegend=not legend_added["Route"]
+                ))
             legend_added["Route"] = True
-        
+    
         # Update map layout
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
@@ -294,7 +305,12 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         )
         st.plotly_chart(fig)
     
+        # Display missing cities under the map
+        if not missing_cities.empty:
+            st.write("### Cities Missing Coordinates")
+            st.dataframe(missing_cities, use_container_width=True)
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
+    
 else:
     st.warning("Please upload both the TLORDER and DRIVERPAY CSV files to proceed.")
