@@ -154,10 +154,11 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     if not month_data.empty:
-        # Group rows by day and alternate colors
-        month_data['Day_Group'] = month_data['Effective_Date'].dt.date  # Extract the date part
-        day_colors = {day: idx % 2 for idx, day in enumerate(month_data['Day_Group'].unique())}  # Assign alternating colors
-        month_data['Highlight'] = month_data['Day_Group'].map(day_colors)
+        # Group rows by day and assign alternating colors
+        month_data['Day_Group'] = month_data['Effective_Date'].dt.date  # Extract only the date part
+        unique_days = month_data['Day_Group'].drop_duplicates().reset_index(drop=True)
+        day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}  # Alternating colors: 0 or 1
+        month_data['Highlight'] = month_data['Day_Group'].map(day_colors)  # Map each day to its color
     
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
@@ -165,7 +166,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
-        )[[
+        )[[  # Include "Highlight" for styling
             "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
             "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date", "Highlight"
         ]].rename(columns={
@@ -186,7 +187,8 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             if route_summary_df["Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
-            "Effective_Date": ""
+            "Effective_Date": "",
+            "Highlight": None  # No highlight for the grand totals row
         }])
     
         # Append grand totals to the route summary table
