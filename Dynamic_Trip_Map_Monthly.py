@@ -164,7 +164,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
         )[[
-            "Route", "BILL_NUMBER", "TOTAL_CHARGE (CAD)", "DISTANCE", "Straight Distance", 
+            "Route", "BILL_NUMBER", "TOTAL_CHARGE_CAD", "DISTANCE", "Straight Distance", 
             "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "Effective_Date"
         ]].rename(columns={
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)", 
