@@ -173,7 +173,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             missing_destinations.rename(columns={'DESTCITY': 'City', 'DESTPROV': 'Province'})
         ]).drop_duplicates()
     
-        # Set Straight Distance to NaN where coordinates are missing
+        # Add missing cities to the table
         month_data['Straight Distance'] = np.where(
             pd.isna(month_data['ORIG_LAT']) | pd.isna(month_data['DEST_LAT']),
             np.nan,
