@@ -78,14 +78,17 @@ def correct_misspellings(df, city_coords, city_column, province_column):
         city, province = row[city_column], row[province_column]
 
         # Use fuzzy matching to find the best match for city and province
-        matched_city, city_score = process.extractOne(city, city_coords["CITY"])
-        matched_province, province_score = process.extractOne(province, city_coords["PROVINCE"])
+        matched_city = process.extractOne(city, city_coords["CITY"], scorer=None)
+        matched_province = process.extractOne(province, city_coords["PROVINCE"], scorer=None)
 
-        if city_score >= 85 and province_score >= 85:  # Threshold for matching
-            corrected_cities.append(matched_city)
-            corrected_provinces.append(matched_province)
+        if matched_city and matched_city[1] >= 85:  # Ensure match exists and meets threshold
+            corrected_cities.append(matched_city[0])
         else:
             corrected_cities.append(city)  # Keep original if no good match
+
+        if matched_province and matched_province[1] >= 85:
+            corrected_provinces.append(matched_province[0])
+        else:
             corrected_provinces.append(province)
 
     df[city_column] = corrected_cities
