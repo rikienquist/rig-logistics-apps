@@ -114,11 +114,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
+    # Ensure `PICK_UP_PUNIT` is uniformly a string
+    tlorder_df['PICK_UP_PUNIT'] = tlorder_df['PICK_UP_PUNIT'].astype(str)
+
     # Filter for user selection
     punit_options = sorted(tlorder_df['PICK_UP_PUNIT'].unique())
     selected_punit = st.selectbox("Select PUNIT:", options=punit_options)
 
-    months = sorted(tlorder_df['PICK_UP_BY'].dt.to_period('M').unique())
+    # Ensure `PICK_UP_BY` is in datetime format for filtering
+    tlorder_df['PICK_UP_BY'] = pd.to_datetime(tlorder_df['PICK_UP_BY'], errors='coerce')
+
+    months = sorted(tlorder_df['PICK_UP_BY'].dt.to_period('M').dropna().unique())
     selected_month = st.selectbox("Select Month:", options=months)
 
     filtered_df, missing_locations = filter_and_correct_data(
