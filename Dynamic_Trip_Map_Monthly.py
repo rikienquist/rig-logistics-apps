@@ -154,15 +154,17 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
 
     if not month_data.empty:
-        # Group rows by day and assign alternating colors
+        # Ensure sorting by Effective_Date to maintain order
+        month_data = month_data.sort_values(by='Effective_Date')
+    
+        # Assign a unique group for each day and alternate colors
         month_data['Day_Group'] = month_data['Effective_Date'].dt.date  # Extract only the date part
-        unique_days = month_data['Day_Group'].drop_duplicates().reset_index(drop=True)
+        unique_days = list(month_data['Day_Group'].unique())  # Get unique dates in the order they appear
         day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}  # Alternating colors: 0 or 1
-        month_data['Highlight'] = month_data['Day_Group'].map(day_colors)  # Map each day to its color
+        month_data['Highlight'] = month_data['Day_Group'].map(day_colors)  # Map each day to its alternating color
     
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
-        month_data = month_data.sort_values(by='Effective_Date')  # Ensure sorting by Effective_Date
     
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
