@@ -57,7 +57,10 @@ def preprocess_tlorder(file, city_coords):
     df['ORIGPROV'] = df['ORIGPROV'].str.strip().str.upper()
     df['DESTCITY'] = df['DESTCITY'].apply(clean_city_name)
     df['DESTPROV'] = df['DESTPROV'].str.strip().str.upper()
-    
+
+    # Ensure there are no duplicates in city_coords after cleaning
+    city_coords = city_coords.drop_duplicates(subset=['CITY', 'PROVINCE'])
+
     # Merge for origins
     origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
     df = df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
@@ -89,6 +92,10 @@ def filter_and_enrich_city_coordinates(df, city_coords):
 
     # Merge with city_coords to get coordinates for relevant cities
     enriched_cities = relevant_cities.merge(city_coords, on=["CITY", "PROVINCE"], how="left")
+
+    # Remove duplicates from the final enriched cities
+    enriched_cities = enriched_cities.drop_duplicates()
+
     return enriched_cities
 
 @st.cache_data
