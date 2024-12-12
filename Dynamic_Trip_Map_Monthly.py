@@ -169,8 +169,8 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             missing_destinations.rename(columns={"DESTCITY": "City", "DESTPROV": "Province"})
         ]).drop_duplicates()
     
-        # Replace missing Straight Distance with None
-        month_data['Straight Distance'] = month_data['Straight Distance'].fillna(None)
+        # Replace missing Straight Distance with NaN
+        month_data['Straight Distance'] = month_data['Straight Distance'].fillna(np.nan)
     
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
