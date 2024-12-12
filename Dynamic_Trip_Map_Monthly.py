@@ -162,10 +162,10 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         unique_days = list(month_data['Day_Group'].unique())
         day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
         month_data['Highlight'] = month_data['Day_Group'].map(day_colors)
-
+    
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
-
+    
         route_summary_df = month_data.assign(
             Route=lambda x: x['ORIGCITY'] + ", " + x['ORIGPROV'] + " to " + x['DESTCITY'] + ", " + x['DESTPROV']
         )[[  # Include "Highlight" for styling
@@ -177,7 +177,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Straight Distance": "Straight Distance (miles)", 
             "TOTAL_PAY_AMT": "Driver Pay (CAD)"
         })
-
+    
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
@@ -192,15 +192,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             "Effective_Date": "",
             "Highlight": None
         }])
-
+    
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-
+    
         # Format currency columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-
+    
         # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
@@ -209,14 +209,14 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 return ['background-color: #c8e0f7'] * len(row)
             else:
                 return ['background-color: #f7f7c8'] * len(row)
-
+    
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
-
+    
         # Generate the map
         fig = go.Figure()
-
+    
         city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
         label_counter = 1
         for _, row in month_data.iterrows():
@@ -230,7 +230,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         for _, row in month_data.iterrows():
             origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
             destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
-
+    
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON']],
                 lat=[row['ORIG_LAT']],
@@ -242,7 +242,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-
+    
             fig.add_trace(go.Scattergeo(
                 lon=[row['DEST_LON']],
                 lat=[row['DEST_LAT']],
@@ -254,7 +254,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-
+    
             fig.add_trace(go.Scattergeo(
                 lon=[row['ORIG_LON'], row['DEST_LON']],
                 lat=[row['ORIG_LAT'], row['DEST_LAT']],
@@ -264,18 +264,33 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-
+    
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
-
-        # Display cities missing coordinates
-        if not missing_cities.empty:
+    
+        # Display cities missing coordinates relevant to the selection
+        relevant_missing_origins = month_data[
+            (pd.isna(month_data['ORIG_LAT']) | pd.isna(month_data['ORIG_LON']))
+        ][['ORIGCITY', 'ORIGPROV']].drop_duplicates().rename(columns={
+            'ORIGCITY': 'City', 'ORIGPROV': 'Province'
+        })
+    
+        relevant_missing_destinations = month_data[
+            (pd.isna(month_data['DEST_LAT']) | pd.isna(month_data['DEST_LON']))
+        ][['DESTCITY', 'DESTPROV']].drop_duplicates().rename(columns={
+            'DESTCITY': 'City', 'DESTPROV': 'Province'
+        })
+    
+        relevant_missing_cities = pd.concat([relevant_missing_origins, relevant_missing_destinations]).drop_duplicates()
+    
+        if not relevant_missing_cities.empty:
             st.write("### Cities Missing Coordinates")
-            st.dataframe(missing_cities, use_container_width=True)
+            st.dataframe(relevant_missing_cities, use_container_width=True)
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
+    
 else:
     st.warning("Please upload both the TLORDER and DRIVERPAY CSV files to proceed.")
