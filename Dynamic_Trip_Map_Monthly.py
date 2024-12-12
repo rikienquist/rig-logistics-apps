@@ -2,6 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import numpy as np
+from fuzzywuzzy import process  # For fuzzy matching
 
 # Initialize global variables for navigation
 if "month_index" not in st.session_state:
@@ -41,12 +42,72 @@ def load_city_coordinates():
     return city_coords
 
 @st.cache_data
+def remove_duplicates_and_correct(city_coords):
+    # Remove duplicate rows based on city, province, latitude, and longitude
+    city_coords = city_coords.drop_duplicates(subset=["CITY", "PROVINCE", "LAT", "LON"], keep="first").reset_index(drop=True)
+
+    # Create a dictionary to consolidate similar city names
+    unique_cities = {}
+    for _, row in city_coords.iterrows():
+        key = (row["PROVINCE"], row["LAT"], row["LON"])
+        if key not in unique_cities:
+            unique_cities[key] = row["CITY"]
+        else:
+            # Update city name with the longest match
+            if len(row["CITY"]) > len(unique_cities[key]):
+                unique_cities[key] = row["CITY"]
+
+    # Update the city names
+    for key, city_name in unique_cities.items():
+        city_coords.loc[
+            (city_coords["PROVINCE"] == key[0]) & 
+            (city_coords["LAT"] == key[1]) & 
+            (city_coords["LON"] == key[2]), 
+            "CITY"
+        ] = city_name
+
+    return city_coords
+
+@st.cache_data
+def correct_misspellings(df, city_coords, city_column, province_column):
+    corrected_cities = []
+    corrected_provinces = []
+
+    # Iterate through each row in the DataFrame
+    for _, row in df.iterrows():
+        city, province = row[city_column], row[province_column]
+
+        # Use fuzzy matching to find the best match for city and province
+        matched_city, city_score = process.extractOne(city, city_coords["CITY"])
+        matched_province, province_score = process.extractOne(province, city_coords["PROVINCE"])
+
+        if city_score >= 85 and province_score >= 85:  # Threshold for matching
+            corrected_cities.append(matched_city)
+            corrected_provinces.append(matched_province)
+        else:
+            corrected_cities.append(city)  # Keep original if no good match
+            corrected_provinces.append(province)
+
+    df[city_column] = corrected_cities
+    df[province_column] = corrected_provinces
+    return df
+
+@st.cache_data
 def preprocess_tlorder(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
+
+    # Correct misspellings in origin and destination
+    df = correct_misspellings(df, city_coords, "ORIGCITY", "ORIGPROV")
+    df = correct_misspellings(df, city_coords, "DESTCITY", "DESTPROV")
+
+    # Merge for origins
     origin_coords = city_coords.rename(columns={"CITY": "ORIGCITY", "PROVINCE": "ORIGPROV", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
     df = df.merge(origin_coords, on=["ORIGCITY", "ORIGPROV"], how="left")
+
+    # Merge for destinations
     dest_coords = city_coords.rename(columns={"CITY": "DESTCITY", "PROVINCE": "DESTPROV", "LAT": "DEST_LAT", "LON": "DEST_LON"})
     df = df.merge(dest_coords, on=["DESTCITY", "DESTPROV"], how="left")
+
     return df
 
 @st.cache_data
@@ -72,9 +133,15 @@ def calculate_haversine(df):
 
 if uploaded_tlorder_file and uploaded_driverpay_file:
     city_coordinates_df = load_city_coordinates()
+
+    # Remove duplicates and correct city/province names in city_coordinates.csv
+    city_coordinates_df = remove_duplicates_and_correct(city_coordinates_df)
+
+    # Process TLORDER and DRIVERPAY files
     tlorder_df = preprocess_tlorder(uploaded_tlorder_file, city_coordinates_df)
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
 
+    # Merge preprocessed data
     tlorder_df = tlorder_df.merge(driver_pay_agg, on='BILL_NUMBER', how='left')
 
     tlorder_df = tlorder_df[
