@@ -263,49 +263,25 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
     
-        # Calculate aggregated totals for both origin and destination cities
-        origin_aggregates = month_data.groupby(['ORIGCITY', 'ORIGPROV']).agg({
+        # Combine origins and destinations for aggregated totals
+        city_aggregates = pd.concat([
+            month_data[['ORIGCITY', 'ORIGPROV', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_AMT']].rename(
+                columns={'ORIGCITY': 'City', 'ORIGPROV': 'Province'}
+            ),
+            month_data[['DESTCITY', 'DESTPROV', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_AMT']].rename(
+                columns={'DESTCITY': 'City', 'DESTPROV': 'Province'}
+            )
+        ], ignore_index=True)
+        
+        # Clean and aggregate the combined data
+        city_aggregates = city_aggregates.groupby(['City', 'Province'], as_index=False).agg({
             'TOTAL_CHARGE_CAD': 'sum',
             'DISTANCE': 'sum',
             'TOTAL_PAY_AMT': 'sum'
-        }).reset_index()
+        })
         
-        origin_aggregates['Profit (CAD)'] = origin_aggregates['TOTAL_CHARGE_CAD'] - origin_aggregates['TOTAL_PAY_AMT'].fillna(0)
-        origin_aggregates['Revenue per Mile'] = origin_aggregates['TOTAL_CHARGE_CAD'] / origin_aggregates['DISTANCE']
-        origin_aggregates.rename(columns={
-            'ORIGCITY': 'City',
-            'ORIGPROV': 'Province',
-            'TOTAL_CHARGE_CAD': 'Total Charge (CAD)',
-            'DISTANCE': 'Distance (miles)',
-            'TOTAL_PAY_AMT': 'Driver Pay (CAD)'
-        }, inplace=True)
-        
-        destination_aggregates = month_data.groupby(['DESTCITY', 'DESTPROV']).agg({
-            'TOTAL_CHARGE_CAD': 'sum',
-            'DISTANCE': 'sum',
-            'TOTAL_PAY_AMT': 'sum'
-        }).reset_index()
-        
-        destination_aggregates['Profit (CAD)'] = destination_aggregates['TOTAL_CHARGE_CAD'] - destination_aggregates['TOTAL_PAY_AMT'].fillna(0)
-        destination_aggregates['Revenue per Mile'] = destination_aggregates['TOTAL_CHARGE_CAD'] / destination_aggregates['DISTANCE']
-        destination_aggregates.rename(columns={
-            'DESTCITY': 'City',
-            'DESTPROV': 'Province',
-            'TOTAL_CHARGE_CAD': 'Total Charge (CAD)',
-            'DISTANCE': 'Distance (miles)',
-            'TOTAL_PAY_AMT': 'Driver Pay (CAD)'
-        }, inplace=True)
-        
-        # Combine origin and destination aggregates
-        city_aggregates = pd.concat([origin_aggregates, destination_aggregates], ignore_index=True)
-        city_aggregates = city_aggregates.groupby(['City', 'Province']).agg({
-            'Total Charge (CAD)': 'sum',
-            'Distance (miles)': 'sum',
-            'Driver Pay (CAD)': 'sum',
-            'Profit (CAD)': 'sum'
-        }).reset_index()
-        
-        city_aggregates['Revenue per Mile'] = city_aggregates['Total Charge (CAD)'] / city_aggregates['Distance (miles)']
+        city_aggregates['Revenue per Mile'] = city_aggregates['TOTAL_CHARGE_CAD'] / city_aggregates['DISTANCE']
+        city_aggregates['Profit (CAD)'] = city_aggregates['TOTAL_CHARGE_CAD'] - city_aggregates['TOTAL_PAY_AMT'].fillna(0)
         
         # Function to fetch aggregate values for a city and province
         def get_city_aggregates(city, province):
@@ -313,9 +289,9 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 (city_aggregates['City'] == city) & (city_aggregates['Province'] == province)
             ]
             if not match.empty:
-                total_charge = match['Total Charge (CAD)'].iloc[0]
-                distance = match['Distance (miles)'].iloc[0]
-                driver_pay = match['Driver Pay (CAD)'].iloc[0]
+                total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
+                distance = match['DISTANCE'].iloc[0]
+                driver_pay = match['TOTAL_PAY_AMT'].iloc[0]
                 profit = match['Profit (CAD)'].iloc[0]
                 rpm = match['Revenue per Mile'].iloc[0]
                 return total_charge, distance, driver_pay, profit, rpm
@@ -323,6 +299,90 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         
         # Generate the map
         fig = go.Figure()
+        
+        city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
+        label_counter = 1
+        for _, row in month_data.iterrows():
+            city_sequence[row['ORIGCITY']].append(label_counter)
+            label_counter += 1
+            city_sequence[row['DESTCITY']].append(label_counter)
+            label_counter += 1
+        
+        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        
+        for _, row in month_data.iterrows():
+            origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
+            destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
+        
+            # Get aggregated values for origin city
+            total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['ORIGCITY'], row['ORIGPROV'])
+            hover_origin_text = (
+                f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                f"Distance (miles): {distance:,.1f}<br>"
+                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                f"Profit (CAD): ${profit:,.2f}"
+            ) if total_charge is not None else f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Data not available"
+        
+            # Add origin marker
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON']],
+                lat=[row['ORIG_LAT']],
+                mode="markers+text",
+                marker=dict(size=8, color="blue"),
+                text=origin_sequence,
+                textposition="top right",
+                name="Origin" if not legend_added["Origin"] else None,
+                hoverinfo="text",
+                hovertext=hover_origin_text,
+                showlegend=not legend_added["Origin"]
+            ))
+            legend_added["Origin"] = True
+        
+            # Get aggregated values for destination city
+            total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['DESTCITY'], row['DESTPROV'])
+            hover_dest_text = (
+                f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                f"Distance (miles): {distance:,.1f}<br>"
+                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                f"Profit (CAD): ${profit:,.2f}"
+            ) if total_charge is not None else f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Data not available"
+        
+            # Add destination marker
+            fig.add_trace(go.Scattergeo(
+                lon=[row['DEST_LON']],
+                lat=[row['DEST_LAT']],
+                mode="markers+text",
+                marker=dict(size=8, color="red"),
+                text=destination_sequence,
+                textposition="top right",
+                name="Destination" if not legend_added["Destination"] else None,
+                hoverinfo="text",
+                hovertext=hover_dest_text,
+                showlegend=not legend_added["Destination"]
+            ))
+            legend_added["Destination"] = True
+        
+            # Add route line
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON'], row['DEST_LON']],
+                lat=[row['ORIG_LAT'], row['DEST_LAT']],
+                mode="lines",
+                line=dict(width=2, color="green"),
+                name="Route" if not legend_added["Route"] else None,
+                hoverinfo="skip",
+                showlegend=not legend_added["Route"]
+            ))
+            legend_added["Route"] = True
+        
+        fig.update_layout(
+            title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
+            geo=dict(scope="north america", projection_type="mercator"),
+        )
+        st.plotly_chart(fig)
         
         city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
         label_counter = 1
