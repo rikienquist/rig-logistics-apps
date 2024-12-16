@@ -295,7 +295,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 profit = match['Profit (CAD)'].iloc[0]
                 rpm = match['Revenue per Mile'].iloc[0]
                 return total_charge, distance, driver_pay, profit, rpm
-            return None, None, None, None, None
+            return 0, 0, 0, 0, 0
         
         # Generate the map
         fig = go.Figure()
@@ -323,7 +323,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
-            ) if total_charge is not None else f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Data not available"
+            )
         
             # Add origin marker
             fig.add_trace(go.Scattergeo(
@@ -349,90 +349,6 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
-            ) if total_charge is not None else f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Data not available"
-        
-            # Add destination marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['DEST_LON']],
-                lat=[row['DEST_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="red"),
-                text=destination_sequence,
-                textposition="top right",
-                name="Destination" if not legend_added["Destination"] else None,
-                hoverinfo="text",
-                hovertext=hover_dest_text,
-                showlegend=not legend_added["Destination"]
-            ))
-            legend_added["Destination"] = True
-        
-            # Add route line
-            fig.add_trace(go.Scattergeo(
-                lon=[row['ORIG_LON'], row['DEST_LON']],
-                lat=[row['ORIG_LAT'], row['DEST_LAT']],
-                mode="lines",
-                line=dict(width=2, color="green"),
-                name="Route" if not legend_added["Route"] else None,
-                hoverinfo="skip",
-                showlegend=not legend_added["Route"]
-            ))
-            legend_added["Route"] = True
-        
-        fig.update_layout(
-            title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
-            geo=dict(scope="north america", projection_type="mercator"),
-        )
-        st.plotly_chart(fig)
-        
-        city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
-        label_counter = 1
-        for _, row in month_data.iterrows():
-            city_sequence[row['ORIGCITY']].append(label_counter)
-            label_counter += 1
-            city_sequence[row['DESTCITY']].append(label_counter)
-            label_counter += 1
-        
-        legend_added = {"Origin": False, "Destination": False, "Route": False}
-        
-        for _, row in month_data.iterrows():
-            origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
-            destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
-        
-            # Get aggregated values for origin city
-            total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['ORIGCITY'], row['ORIGPROV'])
-            hover_origin_text = (
-                f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f if total_charge else 0}<br>"
-                f"Distance (miles): {distance:,.1f if distance else 0}<br>"
-                f"Revenue per Mile: ${rpm:,.2f if rpm else 0}<br>"
-                f"Driver Pay (CAD): ${driver_pay:,.2f if driver_pay else 0}<br>"
-                f"Profit (CAD): ${profit:,.2f if profit else 0}"
-            )
-        
-            # Add origin marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['ORIG_LON']],
-                lat=[row['ORIG_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="blue"),
-                text=origin_sequence,
-                textposition="top right",
-                name="Origin" if not legend_added["Origin"] else None,
-                hoverinfo="text",
-                hovertext=hover_origin_text,
-                showlegend=not legend_added["Origin"]
-            ))
-            legend_added["Origin"] = True
-        
-            # Get aggregated values for destination city
-            total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['DESTCITY'], row['DESTPROV'])
-            hover_dest_text = (
-                f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f if total_charge else 0}<br>"
-                f"Distance (miles): {distance:,.1f if distance else 0}<br>"
-                f"Revenue per Mile: ${rpm:,.2f if rpm else 0}<br>"
-                f"Driver Pay (CAD): ${driver_pay:,.2f if driver_pay else 0}<br>"
-                f"Profit (CAD): ${profit:,.2f if profit else 0}"
             )
         
             # Add destination marker
@@ -467,25 +383,26 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
             geo=dict(scope="north america", projection_type="mercator"),
         )
         st.plotly_chart(fig)
-
+        
         # Display cities missing coordinates relevant to the selection
         relevant_missing_origins = month_data[
             (pd.isna(month_data['ORIG_LAT']) | pd.isna(month_data['ORIG_LON']))
         ][['ORIGCITY', 'ORIGPROV']].drop_duplicates().rename(columns={
             'ORIGCITY': 'City', 'ORIGPROV': 'Province'
         })
-
+        
         relevant_missing_destinations = month_data[
             (pd.isna(month_data['DEST_LAT']) | pd.isna(month_data['DEST_LON']))
         ][['DESTCITY', 'DESTPROV']].drop_duplicates().rename(columns={
             'DESTCITY': 'City', 'DESTPROV': 'Province'
         })
-
+        
         relevant_missing_cities = pd.concat([relevant_missing_origins, relevant_missing_destinations]).drop_duplicates()
-
+        
         if not relevant_missing_cities.empty:
             st.write("### Cities Missing Coordinates")
             st.dataframe(relevant_missing_cities, use_container_width=True)
+
     else:
         st.warning("No data available for the selected PUNIT and Driver ID.")
     
