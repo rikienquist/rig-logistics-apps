@@ -285,14 +285,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         aggregated_origins.rename(columns={'ORIGCITY': 'City', 'ORIGPROV': 'Province'}, inplace=True)
         aggregated_destinations.rename(columns={'DESTCITY': 'City', 'DESTPROV': 'Province'}, inplace=True)
         aggregated_totals = pd.concat([aggregated_origins, aggregated_destinations]).groupby(['City', 'Province']).sum().reset_index()
-        
-        # Sequential numbering logic for cities
-        city_sequence = {city: [] for city in aggregated_totals['City']}
-        label_counter = 1
-        for city in city_sequence.keys():
-            city_sequence[city].append(label_counter)
-            label_counter += 1
-        
+          
         legend_added = {"Origin": False, "Destination": False, "Route": False}
         
         for _, row in month_data.iterrows():
