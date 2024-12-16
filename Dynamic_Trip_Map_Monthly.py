@@ -263,18 +263,25 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
     
-        # Calculate aggregated totals for each origin and destination city
-        city_aggregates = month_data.groupby(['ORIGCITY', 'ORIGPROV']).agg({
+        # Combine origin and destination cities for aggregation
+        city_aggregates = pd.concat([
+            month_data[['ORIGCITY', 'ORIGPROV', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_AMT', 'Profit (CAD)']]
+            .rename(columns={'ORIGCITY': 'City', 'ORIGPROV': 'Province'}),
+            month_data[['DESTCITY', 'DESTPROV', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_AMT', 'Profit (CAD)']]
+            .rename(columns={'DESTCITY': 'City', 'DESTPROV': 'Province'})
+        ])
+        
+        # Group by city and province to get aggregated totals
+        city_aggregates = city_aggregates.groupby(['City', 'Province'], as_index=False).agg({
             'TOTAL_CHARGE_CAD': 'sum',
             'DISTANCE': 'sum',
             'TOTAL_PAY_AMT': 'sum',
             'Profit (CAD)': 'sum'
-        }).reset_index()
+        })
         
+        # Compute Revenue per Mile as Total Charge / Distance
         city_aggregates['Revenue per Mile'] = city_aggregates['TOTAL_CHARGE_CAD'] / city_aggregates['DISTANCE']
         city_aggregates.rename(columns={
-            'ORIGCITY': 'City',
-            'ORIGPROV': 'Province',
             'TOTAL_CHARGE_CAD': 'Total Charge (CAD)',
             'DISTANCE': 'Distance (miles)',
             'TOTAL_PAY_AMT': 'Driver Pay (CAD)',
@@ -315,17 +322,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         
             # Get aggregated values for origin city
             total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['ORIGCITY'], row['ORIGPROV'])
-            if total_charge is not None:
-                hover_origin_text = (
-                    f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
-                    f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                    f"Distance (miles): {distance:,.1f}<br>"
-                    f"Revenue per Mile: ${rpm:,.2f}<br>"
-                    f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                    f"Profit (CAD): ${profit:,.2f}"
-                )
-            else:
-                hover_origin_text = f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Data not available"
+            hover_origin_text = (
+                f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                f"Distance (miles): {distance:,.1f}<br>"
+                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                f"Profit (CAD): ${profit:,.2f}"
+                if total_charge is not None else f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>Data not available"
+            )
         
             # Add origin marker
             fig.add_trace(go.Scattergeo(
@@ -344,17 +349,15 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         
             # Get aggregated values for destination city
             total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['DESTCITY'], row['DESTPROV'])
-            if total_charge is not None:
-                hover_dest_text = (
-                    f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
-                    f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                    f"Distance (miles): {distance:,.1f}<br>"
-                    f"Revenue per Mile: ${rpm:,.2f}<br>"
-                    f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                    f"Profit (CAD): ${profit:,.2f}"
-                )
-            else:
-                hover_dest_text = f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Data not available"
+            hover_dest_text = (
+                f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                f"Distance (miles): {distance:,.1f}<br>"
+                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                f"Profit (CAD): ${profit:,.2f}"
+                if total_charge is not None else f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>Data not available"
+            )
         
             # Add destination marker
             fig.add_trace(go.Scattergeo(
