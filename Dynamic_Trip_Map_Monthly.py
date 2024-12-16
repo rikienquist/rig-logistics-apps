@@ -266,61 +266,72 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         # Generate the map
         fig = go.Figure()
 
-        # Aggregate totals for cities (origins and destinations)
-        aggregated_origins = month_data.groupby(['ORIGCITY', 'ORIGPROV']).agg({
-            'TOTAL_CHARGE_CAD': 'sum',
-            'DISTANCE': 'sum',
-            'TOTAL_PAY_AMT': 'sum',
-            'Profit (CAD)': 'sum'
-        }).reset_index()
-
-        aggregated_destinations = month_data.groupby(['DESTCITY', 'DESTPROV']).agg({
-            'TOTAL_CHARGE_CAD': 'sum',
-            'DISTANCE': 'sum',
-            'TOTAL_PAY_AMT': 'sum',
-            'Profit (CAD)': 'sum'
-        }).reset_index()
-
-        # Combine origins and destinations
-        aggregated_origins.rename(columns={'ORIGCITY': 'City', 'ORIGPROV': 'Province'}, inplace=True)
-        aggregated_destinations.rename(columns={'DESTCITY': 'City', 'DESTPROV': 'Province'}, inplace=True)
-        aggregated_totals = pd.concat([aggregated_origins, aggregated_destinations])\
-                               .groupby(['City', 'Province']).sum().reset_index()
-
-        # Sequential numbering logic for cities
-        city_sequence = {city: [] for city in aggregated_totals['City']}
+        city_sequence = {city: [] for city in set(month_data['ORIGCITY']).union(month_data['DESTCITY'])}
         label_counter = 1
-        for city in city_sequence.keys():
-            city_sequence[city].append(label_counter)
+        for _, row in month_data.iterrows():
+            city_sequence[row['ORIGCITY']].append(label_counter)
             label_counter += 1
-
-        # Track legend additions
+            city_sequence[row['DESTCITY']].append(label_counter)
+            label_counter += 1
+        
         legend_added = {"Origin": False, "Destination": False, "Route": False}
+        
+        for _, row in month_data.iterrows():
+            origin_sequence = ", ".join(map(str, city_sequence[row['ORIGCITY']]))
+            destination_sequence = ", ".join(map(str, city_sequence[row['DESTCITY']]))
 
-        # Add map markers for cities using aggregated totals
-        for _, row in aggregated_totals.iterrows():
-            revenue_per_mile = row['TOTAL_CHARGE_CAD'] / row['DISTANCE'] if row['DISTANCE'] != 0 else 0
+            # Add origin marker
             fig.add_trace(go.Scattergeo(
-                lon=[None],  # Coordinates are placeholder here (adjust as needed)
-                lat=[None],
+                lon=[row['ORIG_LON']],
+                lat=[row['ORIG_LAT']],
                 mode="markers+text",
-                marker=dict(size=8, color="blue"),  # Marker color
-                text=f"{city_sequence[row['City']][0]}",  # Use the sequential number
+                marker=dict(size=8, color="blue"),
+                text=origin_sequence,
                 textposition="top right",
-                name="City Totals" if not legend_added["Origin"] else None,
+                name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
-                hovertext=(
-                    f"City: {row['City']}, {row['Province']}<br>"
-                    f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
-                    f"Distance (miles): {row['DISTANCE']:.1f}<br>"
-                    f"Revenue per Mile: ${revenue_per_mile:.2f}<br>"
-                    f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
-                    f"Profit (CAD): ${row['Profit (CAD)']:.2f}"
-                )
+                hovertext=(f"City: {row['ORIGCITY']}, {row['ORIGPROV']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Origin"]
             ))
-            legend_added["Origin"] = True  # Ensure legend for origin appears only once
+            legend_added["Origin"] = True
 
-        # Update map layout
+            # Add destination marker
+            fig.add_trace(go.Scattergeo(
+                lon=[row['DEST_LON']],
+                lat=[row['DEST_LAT']],
+                mode="markers+text",
+                marker=dict(size=8, color="red"),
+                text=destination_sequence,
+                textposition="top right",
+                name="Destination" if not legend_added["Destination"] else None,
+                hoverinfo="text",
+                hovertext=(f"City: {row['DESTCITY']}, {row['DESTPROV']}<br>"
+                           f"Total Charge (CAD): ${row['TOTAL_CHARGE_CAD']:.2f}<br>"
+                           f"Distance (miles): {row['DISTANCE']:.1f}<br>"
+                           f"Revenue per Mile: ${row['Revenue per Mile']:.2f}<br>"
+                           f"Driver Pay (CAD): ${row['TOTAL_PAY_AMT']:.2f}<br>"
+                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}"),
+                showlegend=not legend_added["Destination"]
+            ))
+            legend_added["Destination"] = True
+
+            # Add route line
+            fig.add_trace(go.Scattergeo(
+                lon=[row['ORIG_LON'], row['DEST_LON']],
+                lat=[row['ORIG_LAT'], row['DEST_LAT']],
+                mode="lines",
+                line=dict(width=2, color="green"),
+                name="Route" if not legend_added["Route"] else None,
+                hoverinfo="skip",
+                showlegend=not legend_added["Route"]
+            ))
+            legend_added["Route"] = True
+
         fig.update_layout(
             title=f"Routes for {selected_month} - PUNIT: {selected_punit}, Driver ID: {selected_driver}",
             geo=dict(scope="north america", projection_type="mercator"),
@@ -350,4 +361,3 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     
 else:
     st.warning("Please upload both the TLORDER and DRIVERPAY CSV files to proceed.")
-    
