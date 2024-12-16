@@ -301,42 +301,42 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
 
             # Add origin marker
             for _, row in aggregated_totals.iterrows():
-            fig.add_trace(go.Scattergeo(
-                lon=[None],  # Placeholder as no coordinates are being plotted here
-                lat=[None],
-                mode="markers+text",
-                marker=dict(size=8, color="blue"),  # Marker color
-                text=f"{city_sequence[row['City']][0]}",
-                textposition="top right",
-                name="City Totals",
-                hoverinfo="text",
-                hovertext=(f"City: {row['City']}, {row['Province']}<br>"
-                           f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
-                           f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
-                           f"Revenue per Mile: ${(row['Total Charge (CAD)'] / row['Distance (miles)']):.2f}<br>"
-                           f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
-            ))
+                fig.add_trace(go.Scattergeo(
+                    lon=[None],  # Placeholder as no coordinates are being plotted here
+                    lat=[None],
+                    mode="markers+text",
+                    marker=dict(size=8, color="blue"),  # Marker color
+                    text=f"{city_sequence[row['City']][0]}",
+                    textposition="top right",
+                    name="City Totals",
+                    hoverinfo="text",
+                    hovertext=(f"City: {row['City']}, {row['Province']}<br>"
+                               f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                               f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
+                               f"Revenue per Mile: ${(row['Total Charge (CAD)'] / row['Distance (miles)']):.2f}<br>"
+                               f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
+                               f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                ))
             legend_added["Origin"] = True
 
             # Add destination marker
             for _, row in aggregated_totals.iterrows():
-            fig.add_trace(go.Scattergeo(
-                lon=[None],  # Placeholder as no coordinates are being plotted here
-                lat=[None],
-                mode="markers+text",
-                marker=dict(size=8, color="blue"),  # Marker color
-                text=f"{city_sequence[row['City']][0]}",
-                textposition="top right",
-                name="City Totals",
-                hoverinfo="text",
-                hovertext=(f"City: {row['City']}, {row['Province']}<br>"
-                           f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
-                           f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
-                           f"Revenue per Mile: ${(row['Total Charge (CAD)'] / row['Distance (miles)']):.2f}<br>"
-                           f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
-                           f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
-            ))
+                fig.add_trace(go.Scattergeo(
+                    lon=[None],  # Placeholder as no coordinates are being plotted here
+                    lat=[None],
+                    mode="markers+text",
+                    marker=dict(size=8, color="blue"),  # Marker color
+                    text=f"{city_sequence[row['City']][0]}",
+                    textposition="top right",
+                    name="City Totals",
+                    hoverinfo="text",
+                    hovertext=(f"City: {row['City']}, {row['Province']}<br>"
+                               f"Total Charge (CAD): ${row['Total Charge (CAD)']:.2f}<br>"
+                               f"Distance (miles): {row['Distance (miles)']:.1f}<br>"
+                               f"Revenue per Mile: ${(row['Total Charge (CAD)'] / row['Distance (miles)']):.2f}<br>"
+                               f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:.2f}<br>"
+                               f"Profit (CAD): ${row['Profit (CAD)']:.2f}")
+                ))
             legend_added["Destination"] = True
 
             # Add route line
