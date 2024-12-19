@@ -124,29 +124,34 @@ if uploaded_legsum_file:
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
     
-    # Ensure CHARGES is numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', 0), errors='coerce')
+    # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
+    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
+    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
     
-    # Calculate TOTAL_CHARGE_CAD only for rows with a BILL_NUMBER and valid CHARGES
+    # Calculate TOTAL_CHARGE_CAD only for rows with a BILL_NUMBER and valid CHARGES or XCHARGES
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']) & pd.notna(legsum_df['CHARGES']),
-        legsum_df['CHARGES'] * exchange_rate,  # Convert CHARGES to CAD
-        None  # Set to None if BILL_NUMBER or CHARGES is missing
+        pd.notna(legsum_df['BILL_NUMBER']) & (pd.notna(legsum_df['CHARGES']) | pd.notna(legsum_df['XCHARGES'])),
+        ((legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate),  # Sum charges and convert to CAD
+        None  # Set to None if BILL_NUMBER or charges are missing
     )
     
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
     legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
     
-    # Calculate Revenue per Mile safely
+    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
     legsum_df['Revenue per Mile'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
         legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
         np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
     )
     
-    # Calculate Profit (CAD)
-    legsum_df['Profit (CAD)'] = legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0)
+    # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
+    legsum_df['Profit (CAD)'] = np.where(
+        pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
+        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),  # Calculate Profit
+        np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
+    )
 
     # Add a Month column for grouping
     legsum_df['Month'] = legsum_df['LS_ACTUAL_DATE'].dt.to_period('M')
