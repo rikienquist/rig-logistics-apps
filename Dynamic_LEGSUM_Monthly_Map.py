@@ -134,9 +134,10 @@ if uploaded_legsum_file:
     
     legsum_df['Revenue per Mile'] = np.where(
         (legsum_df['LS_LEG_DIST'] > 0) & pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
-        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],
-        None  # Assign None if distance is zero or missing
+        legsum_df['TOTAL_CHARGE_CAD'].astype(float) / legsum_df['LS_LEG_DIST'],
+        np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
     )
+
     legsum_df['Profit (CAD)'] = legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0)
 
     # Add a Month column for grouping
