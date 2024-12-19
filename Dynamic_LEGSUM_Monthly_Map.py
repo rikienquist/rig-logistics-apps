@@ -128,10 +128,14 @@ if uploaded_legsum_file:
     legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
     legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
     
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
+    # Calculate TOTAL_CHARGE_CAD only for rows with a BILL_NUMBER and valid CHARGES or XCHARGES
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
         pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
+        np.where(
+            legsum_df['CURRENCY_CODE'] == 'USD',  # If currency is USD, convert to CAD
+            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # If CAD, no conversion
+        ),
         None  # Set to None if BILL_NUMBER is missing
     )
     
