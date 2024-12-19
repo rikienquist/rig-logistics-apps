@@ -112,32 +112,35 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-if uploaded_legsum_file:
-    city_coordinates_df = load_city_coordinates()
-    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
-
-    # Optional: Add DRIVERPAY data if uploaded
-    if uploaded_driverpay_file:
-        driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
-        legsum_df = legsum_df.merge(driver_pay_agg, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
-
-    # Add currency conversion for charges (if applicable)
-    exchange_rate = 1.38
+if uploaded_tlorder_file:
+        # Load TLORDER data
+        tlorder_df = pd.read_csv(uploaded_tlorder_file, low_memory=False)
     
-    # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
+        # Ensure CHARGES, XCHARGES, and CURRENCY_CODE are present and valid in TLORDER
+        tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df.get('CHARGES', None), errors='coerce')
+        tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df.get('XCHARGES', None), errors='coerce')
     
-    # Calculate TOTAL_CHARGE_CAD only for rows with a BILL_NUMBER and valid CHARGES or XCHARGES
-    legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        np.where(
-            legsum_df['CURRENCY_CODE'] == 'USD',  # If currency is USD, convert to CAD
-            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
-            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # If CAD, no conversion
-        ),
-        None  # Set to None if BILL_NUMBER is missing
-    )
+        # Merge TLORDER into LEGSUM on BILL_NUMBER (TLORDER) and LS_FREIGHT (LEGSUM)
+        legsum_df = legsum_df.merge(
+            tlorder_df[['BILL_NUMBER', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE']], 
+            left_on='LS_FREIGHT', 
+            right_on='BILL_NUMBER', 
+            how='left'
+        )
+    
+        # Add currency conversion for charges (if applicable)
+        exchange_rate = 1.38
+        legsum_df['TOTAL_CHARGE_CAD'] = np.where(
+            pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
+            np.where(
+                legsum_df['CURRENCY_CODE'] == 'USD',  # If currency is USD, convert to CAD
+                (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+                legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # If CAD, no conversion
+            ),
+            None  # Set to None if BILL_NUMBER is missing
+        )
+    else:
+        st.warning("Please upload TLORDER data to calculate Total Charges (CAD).")
     
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
