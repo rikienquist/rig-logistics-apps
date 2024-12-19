@@ -128,12 +128,15 @@ if uploaded_legsum_file:
 
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
         pd.notna(legsum_df['BILL_NUMBER']),
-        legsum_df['CHARGES'] * 1.38,  # Assuming 'CHARGES' is in USD; apply conversion
-        None  # Set to None if BILL_NUMBER is missing
+        legsum_df['CHARGES'] * 1.38,
+        None
     )
-
-    # Calculate Revenue per Mile and Profit
-    legsum_df['Revenue per Mile'] = legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST']
+    
+    legsum_df['Revenue per Mile'] = np.where(
+        (legsum_df['LS_LEG_DIST'] > 0) & pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
+        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],
+        None  # Assign None if distance is zero or missing
+    )
     legsum_df['Profit (CAD)'] = legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0)
 
     # Add a Month column for grouping
