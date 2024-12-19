@@ -134,9 +134,13 @@ if uploaded_legsum_file:
         None  # Set to None if BILL_NUMBER or CHARGES is missing
     )
     
+    # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
+    legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
+    legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
+    
     # Calculate Revenue per Mile safely
     legsum_df['Revenue per Mile'] = np.where(
-        (legsum_df['LS_LEG_DIST'] > 0) & pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
+        pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
         legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
         np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
     )
