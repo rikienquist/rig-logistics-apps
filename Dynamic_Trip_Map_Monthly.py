@@ -1,3 +1,5 @@
+### CHANGED THE HOVERING TO SUMS
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -133,37 +135,23 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
         (pd.notna(tlorder_df['DISTANCE']))
     ].copy()
 
-    # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
-    
-    # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
-    
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
-    legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
-        None  # Set to None if BILL_NUMBER is missing
+    valid_routes['CHARGES'] = pd.to_numeric(valid_routes['CHARGES'], errors='coerce')
+    valid_routes['XCHARGES'] = pd.to_numeric(valid_routes['XCHARGES'], errors='coerce')
+    valid_routes['TOTAL_CHARGE_CAD'] = np.where(
+        valid_routes['CURRENCY_CODE'] == 'USD',
+        (valid_routes['CHARGES'] + valid_routes['XCHARGES']) * exchange_rate,
+        valid_routes['CHARGES'] + valid_routes['XCHARGES']
     )
-    
-    # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
-    legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
-    legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
-    
-    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
-    legsum_df['Revenue per Mile'] = np.where(
-        pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
-        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
-        np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
-    )
-    
-    # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
-    legsum_df['Profit (CAD)'] = np.where(
-        pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
-        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),  # Calculate Profit
-        np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
-    )
+
+    # Filter for non-zero charges
+    filtered_df = valid_routes[
+        (valid_routes['TOTAL_CHARGE_CAD'] != 0)
+    ].copy()
+
+    filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
+    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
+    filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
     cutoff_date = pd.Timestamp("2024-10-01")
     filtered_df['Effective_Date'] = pd.to_datetime(
