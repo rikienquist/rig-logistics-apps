@@ -125,8 +125,11 @@ if uploaded_legsum_file:
     exchange_rate = 1.38
     
     # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
+    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce')
+    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce')
+    
+    # Debugging output to ensure CHARGES and XCHARGES are properly converted
+    st.write("Charges and XCharges Conversion:", legsum_df[['BILL_NUMBER', 'CHARGES', 'XCHARGES']])
     
     # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
@@ -134,6 +137,9 @@ if uploaded_legsum_file:
         (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
         None  # Set to None if BILL_NUMBER is missing
     )
+    
+    # Debugging output to ensure TOTAL_CHARGE_CAD is calculated correctly
+    st.write("Total Charge CAD Calculation:", legsum_df[['BILL_NUMBER', 'CHARGES', 'XCHARGES', 'TOTAL_CHARGE_CAD']])
     
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
