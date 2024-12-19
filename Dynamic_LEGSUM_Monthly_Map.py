@@ -138,19 +138,17 @@ if uploaded_legsum_file:
     # Optional: Add TLORDER data if uploaded
     if uploaded_tlorder_file:
         tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-        # Debugging: Check key columns before merge
-        st.write("LEGSUM LS_FREIGHT Sample:", legsum_df['LS_FREIGHT'].head())
-        st.write("TLORDER BILL_NUMBER Sample:", tlorder_df['BILL_NUMBER'].head())
-
         # Merge TLORDER with LEGSUM
-        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left', suffixes=('', '_TLORDER'))
 
-        # Debugging: Confirm merge
-        st.write("Post-Merge LEGSUM Columns:", legsum_df.columns)
+        # Ensure the correct BILL_NUMBER column is used after merge
+        if 'BILL_NUMBER_TLORDER' in legsum_df.columns:
+            legsum_df.rename(columns={'BILL_NUMBER_TLORDER': 'BILL_NUMBER'}, inplace=True)
 
-    # Debugging: Ensure BILL_NUMBER exists after merges
+    # Ensure BILL_NUMBER exists after merges
     if 'BILL_NUMBER' not in legsum_df.columns:
         st.error("BILL_NUMBER column missing after merge. Check your data and merge keys.")
+        st.stop()
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
