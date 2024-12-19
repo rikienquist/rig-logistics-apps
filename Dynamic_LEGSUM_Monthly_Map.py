@@ -138,15 +138,28 @@ if uploaded_legsum_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
 
-    # Optional: Load TLORDER data for additional details
+    # Optional: Load TLORDER data for BILL_NUMBER and associated fields
     if uploaded_tlorder_file:
         tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+        legsum_df = legsum_df.merge(
+            tlorder_df, 
+            left_on='LS_FREIGHT',  # Merge LEGSUM's LS_FREIGHT with TLORDER's BILL_NUMBER
+            right_on='BILL_NUMBER', 
+            how='left'
+        )
 
-    # Optional: Add DRIVERPAY data if uploaded
+    # Optional: Add DRIVERPAY data for payment details
     if uploaded_driverpay_file:
         driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
-        legsum_df = legsum_df.merge(driver_pay_agg, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+        legsum_df = legsum_df.merge(
+            driver_pay_agg, 
+            left_on='LS_FREIGHT', 
+            right_on='BILL_NUMBER', 
+            how='left'
+        )
+
+    # Debugging step: Check BILL_NUMBER existence after merge
+    st.write(legsum_df[['LS_FREIGHT', 'BILL_NUMBER', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE']])
 
     # Add currency conversion for charges
     exchange_rate = 1.38
