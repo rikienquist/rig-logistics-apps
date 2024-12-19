@@ -126,6 +126,12 @@ if uploaded_legsum_file:
     legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', 0), errors='coerce')
     legsum_df['TOTAL_CHARGE_CAD'] = legsum_df['CHARGES'] * exchange_rate
 
+    legsum_df['TOTAL_CHARGE_CAD'] = np.where(
+        pd.notna(legsum_df['BILL_NUMBER']),
+        legsum_df['CHARGES'] * 1.38,  # Assuming 'CHARGES' is in USD; apply conversion
+        None  # Set to None if BILL_NUMBER is missing
+    )
+
     # Calculate Revenue per Mile and Profit
     legsum_df['Revenue per Mile'] = legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST']
     legsum_df['Profit (CAD)'] = legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0)
