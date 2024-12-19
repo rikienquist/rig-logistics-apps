@@ -88,6 +88,28 @@ def filter_and_enrich_locations(df, city_coords):
     return enriched_locations
 
 @st.cache_data
+def preprocess_tlorder(file):
+    # Load the TLORDER CSV file
+    df = pd.read_csv(file, low_memory=False)
+
+    # Ensure relevant columns are present and clean
+    columns_needed = [
+        'BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE',
+        'DISTANCE', 'DISTANCE_UNITS'
+    ]
+    df = df[columns_needed]
+
+    # Standardize column names for consistent processing
+    df.columns = [col.upper().strip() for col in df.columns]
+
+    # Convert numeric columns to appropriate types
+    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
+    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
+    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
+
+    return df
+
+@st.cache_data
 def preprocess_driverpay(file):
     df = pd.read_csv(file, low_memory=False)
     df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
