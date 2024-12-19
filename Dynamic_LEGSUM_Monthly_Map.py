@@ -138,7 +138,6 @@ if uploaded_legsum_file:
     # Optional: Add TLORDER data if uploaded
     if uploaded_tlorder_file:
         tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-        # Merge TLORDER with LEGSUM
         legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left', suffixes=('', '_TLORDER'))
 
         # Ensure the correct BILL_NUMBER column is used after merge
@@ -153,11 +152,15 @@ if uploaded_legsum_file:
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
 
+    # Ensure CHARGES and XCHARGES are numeric
+    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce').fillna(0)
+    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce').fillna(0)
+
     # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists in TLORDER
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
         pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
-        None  # Set to None if BILL_NUMBER is missing
+        (legsum_df['CHARGES'] + legsum_df['XCHARGES']) * exchange_rate,  # Sum charges and convert
+        np.nan  # Set to NaN if BILL_NUMBER is missing
     )
 
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
