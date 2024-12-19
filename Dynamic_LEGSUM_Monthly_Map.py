@@ -47,48 +47,63 @@ def load_city_coordinates():
   return city_coords
 
 @st.cache_data
-def preprocess_tlorder(file):
-    """
-    Preprocess TLORDER data to extract relevant columns and ensure data consistency.
-    """
-    df = pd.read_csv(file, low_memory=False)
-    # Convert numeric fields and clean data
-    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
-    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
-    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
-    df['CURRENCY_CODE'] = df['CURRENCY_CODE'].str.strip().str.upper()
-    return df[['BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'DISTANCE', 'DISTANCE_UNITS']]
-
-
-@st.cache_data
-def preprocess_legsum(file, city_coords, tlorder_df):
-    """
-    Preprocess LEGSUM data and merge it with TLORDER to include additional billing information.
-    """
-    # Load LEGSUM and standardize location names
+def preprocess_legsum(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
     df['LS_ACTUAL_DATE'] = pd.to_datetime(df['LS_ACTUAL_DATE'], errors='coerce')
+
+    # Standardize location names
     city_coords['LOCATION'] = city_coords['LOCATION'].str.strip().str.upper()
     df['LEGO_ZONE_DESC'] = df['LEGO_ZONE_DESC'].str.strip().str.upper()
     df['LEGD_ZONE_DESC'] = df['LEGD_ZONE_DESC'].str.strip().str.upper()
 
-    # Merge coordinates for origin and destination zones
+    # Merge for LEGO_ZONE_DESC
     lego_coords = city_coords.rename(columns={"LOCATION": "LEGO_ZONE_DESC", "LAT": "LEGO_LAT", "LON": "LEGO_LON"})
-    legd_coords = city_coords.rename(columns={"LOCATION": "LEGD_ZONE_DESC", "LAT": "LEGD_LAT", "LON": "LEGD_LON"})
     df = df.merge(lego_coords, on="LEGO_ZONE_DESC", how="left")
-    df = df.merge(legd_coords, on="LEGD_ZONE_DESC", how="left")
 
-    # Merge with TLORDER to get billing information
-    df = df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+    # Merge for LEGD_ZONE_DESC
+    legd_coords = city_coords.rename(columns={"LOCATION": "LEGD_ZONE_DESC", "LAT": "LEGD_LAT", "LON": "LEGD_LON"})
+    df = df.merge(legd_coords, on="LEGD_ZONE_DESC", how="left")
 
     return df
 
+@st.cache_data
+def preprocess_tlorder(file):
+    df = pd.read_csv(file, low_memory=False)
+    # Ensure numeric columns are properly processed
+    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
+    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
+    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
+
+    # Standardize and clean other columns
+    df['BILL_NUMBER'] = df['BILL_NUMBER'].astype(str).str.strip()
+    df['CALLNAME'] = df['CALLNAME'].str.strip().str.upper()
+    df['CURRENCY_CODE'] = df['CURRENCY_CODE'].str.strip().str.upper()
+
+    return df
+
+@st.cache_data
+def filter_and_enrich_locations(df, city_coords):
+    # Standardize location names in city_coords
+    city_coords['LOCATION'] = city_coords['LOCATION'].str.strip().str.upper()
+
+    # Extract unique LEGO_ZONE_DESC and LEGD_ZONE_DESC from the dataset
+    relevant_origins = df[['LEGO_ZONE_DESC']].drop_duplicates()
+    relevant_destinations = df[['LEGD_ZONE_DESC']].drop_duplicates()
+
+    relevant_locations = pd.concat([relevant_origins.rename(columns={'LEGO_ZONE_DESC': 'LOCATION'}),
+                                     relevant_destinations.rename(columns={'LEGD_ZONE_DESC': 'LOCATION'})]
+                                   ).drop_duplicates()
+
+    # Merge with city_coords to enrich relevant locations with latitude and longitude
+    enriched_locations = relevant_locations.merge(city_coords, on="LOCATION", how="left")
+
+    # Remove duplicates from the final enriched locations
+    enriched_locations = enriched_locations.drop_duplicates()
+
+    return enriched_locations
 
 @st.cache_data
 def preprocess_driverpay(file):
-    """
-    Preprocess DRIVERPAY data to aggregate total payment amounts per BILL_NUMBER.
-    """
     df = pd.read_csv(file, low_memory=False)
     df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
     driver_pay_agg = df.groupby('BILL_NUMBER').agg({
@@ -97,40 +112,41 @@ def preprocess_driverpay(file):
     }).reset_index()
     return driver_pay_agg
 
-
 @st.cache_data
 def calculate_haversine(df):
     """
     Calculate the great-circle distance (haversine formula) between origin and destination coordinates.
+    Applies to LEGO_LAT, LEGO_LON (origin) and LEGD_LAT, LEGD_LON (destination) in LEGSUM.
     """
     R = 3958.8  # Radius of the Earth in miles
     lat1, lon1 = np.radians(df['LEGO_LAT']), np.radians(df['LEGO_LON'])
     lat2, lon2 = np.radians(df['LEGD_LAT']), np.radians(df['LEGD_LON'])
     dlat, dlon = lat2 - lat1, lon2 - lon1
+
     a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
-
-
-if uploaded_legsum_file and uploaded_tlorder_file:
+if uploaded_legsum_file:
     city_coordinates_df = load_city_coordinates()
-    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df, tlorder_df)
+    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
 
     # Optional: Add DRIVERPAY data if uploaded
     if uploaded_driverpay_file:
         driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
         legsum_df = legsum_df.merge(driver_pay_agg, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
+    # Optional: Add TLORDER data if uploaded
+    if uploaded_tlorder_file:
+        tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce')
 
-    # Calculate TOTAL_CHARGE_CAD only for rows with a BILL_NUMBER
+    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists in TLORDER
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
+        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
         None  # Set to None if BILL_NUMBER is missing
     )
 
@@ -138,18 +154,18 @@ if uploaded_legsum_file and uploaded_tlorder_file:
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
     legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
 
-    # Calculate Revenue per Mile safely
+    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
     legsum_df['Revenue per Mile'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
-        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],
-        np.nan
+        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
+        np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
     )
 
-    # Calculate Profit (CAD)
+    # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
     legsum_df['Profit (CAD)'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
-        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),
-        np.nan
+        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),  # Calculate Profit
+        np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
     )
 
     # Add a Month column for grouping
@@ -176,13 +192,19 @@ if uploaded_legsum_file and uploaded_tlorder_file:
     legsum_df['LS_POWER_UNIT'] = legsum_df['LS_POWER_UNIT'].astype(str)
     punit_options = sorted(legsum_df['LS_POWER_UNIT'].unique())
     selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
-    relevant_drivers = legsum_df[legsum_df['LS_POWER_UNIT'] == selected_punit]['DRIVER_ID'].unique()
-    driver_options = ["All"] + sorted(relevant_drivers.astype(str))
-    selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
-    filtered_view = legsum_df[legsum_df['LS_POWER_UNIT'] == selected_punit].copy()
-    if selected_driver != "All":
-        filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
     
+    # Filter data by selected power unit
+    filtered_view = legsum_df[legsum_df['LS_POWER_UNIT'] == selected_punit].copy()
+    
+    # Add driver filter if DRIVER_ID exists
+    if 'DRIVER_ID' in legsum_df.columns:
+        relevant_drivers = filtered_view['DRIVER_ID'].dropna().unique()
+        driver_options = ["All"] + sorted(relevant_drivers.astype(str))
+        selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
+        if selected_driver != "All":
+            filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
+    
+    # Ensure there are months available for filtering
     months = sorted(filtered_view['Month'].unique())
     if len(months) == 0:
         st.warning("No data available for the selected Power Unit and Driver ID.")
@@ -203,7 +225,6 @@ if uploaded_legsum_file and uploaded_tlorder_file:
     
         # Create the route summary DataFrame
         month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
-    
         route_summary_df = month_data.assign(
             Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
         )[[  # Include "Highlight" for styling
@@ -234,13 +255,13 @@ if uploaded_legsum_file and uploaded_tlorder_file:
         }])
     
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-
+    
         # Format currency columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-        
+    
         # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
@@ -249,11 +270,11 @@ if uploaded_legsum_file and uploaded_tlorder_file:
                 return ['background-color: #c8e0f7'] * len(row)
             else:
                 return ['background-color: #f7f7c8'] * len(row)
-        
+    
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
-        
+    
         # Combine origins and destinations for aggregated totals
         location_aggregates = pd.concat([
             month_data[['LEGO_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'LS_LEG_DIST', 'TOTAL_PAY_AMT']].rename(
@@ -263,17 +284,17 @@ if uploaded_legsum_file and uploaded_tlorder_file:
                 columns={'LEGD_ZONE_DESC': 'Location'}
             )
         ], ignore_index=True)
-        
+    
         # Clean and aggregate the combined data
         location_aggregates = location_aggregates.groupby(['Location'], as_index=False).agg({
             'TOTAL_CHARGE_CAD': 'sum',
             'LS_LEG_DIST': 'sum',
             'TOTAL_PAY_AMT': 'sum'
         })
-        
+    
         location_aggregates['Revenue per Mile'] = location_aggregates['TOTAL_CHARGE_CAD'] / location_aggregates['LS_LEG_DIST']
         location_aggregates['Profit (CAD)'] = location_aggregates['TOTAL_CHARGE_CAD'] - location_aggregates['TOTAL_PAY_AMT'].fillna(0)
-        
+    
         # Function to fetch aggregate values for a location
         def get_location_aggregates(location):
             match = location_aggregates[location_aggregates['Location'] == location]
@@ -289,7 +310,7 @@ if uploaded_legsum_file and uploaded_tlorder_file:
         # Generate the map
         fig = go.Figure()
         
-        # Track sequence of city appearance
+        # Track sequence of location appearances
         location_sequence = {location: [] for location in set(month_data['LEGO_ZONE_DESC']).union(month_data['LEGD_ZONE_DESC'])}
         label_counter = 1
         for _, row in month_data.iterrows():
@@ -391,6 +412,6 @@ if uploaded_legsum_file and uploaded_tlorder_file:
         
     else:
         st.warning("No data available for the selected Power Unit and Driver ID.")
-
+        
 else:
     st.warning("Please upload LEGSUM, TLORDER and DRIVERPAY CSV files to proceed.")
