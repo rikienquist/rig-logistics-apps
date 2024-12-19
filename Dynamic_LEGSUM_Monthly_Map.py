@@ -151,6 +151,7 @@ if uploaded_legsum_file:
         calculate_haversine(legsum_df)
     )
 
+    legsum_df['LS_POWER_UNIT'] = legsum_df['LS_POWER_UNIT'].astype(str)
     punit_options = sorted(legsum_df['LS_POWER_UNIT'].unique())
     selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
     relevant_drivers = legsum_df[legsum_df['LS_POWER_UNIT'] == selected_punit]['DRIVER_ID'].unique()
