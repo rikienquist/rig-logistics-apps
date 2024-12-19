@@ -90,24 +90,32 @@ def filter_and_enrich_locations(df, city_coords):
 @st.cache_data
 def preprocess_tlorder(file):
     # Load the TLORDER CSV file
-    df = pd.read_csv(file, low_memory=False)
+    tlorder_df = pd.read_csv(file, low_memory=False)
 
-    # Ensure relevant columns are present and clean
-    columns_needed = [
-        'BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE',
-        'DISTANCE', 'DISTANCE_UNITS'
+    # Debug: Check available columns
+    st.write("TLORDER Columns:", tlorder_df.columns)
+
+    # Ensure relevant columns exist
+    expected_columns = [
+        'BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'DISTANCE', 'DISTANCE_UNITS'
     ]
-    df = df[columns_needed]
+    missing_columns = [col for col in expected_columns if col not in tlorder_df.columns]
+    if missing_columns:
+        st.error(f"Missing columns in TLORDER file: {missing_columns}")
+        return pd.DataFrame()  # Return empty DataFrame to avoid further errors
 
-    # Standardize column names for consistent processing
-    df.columns = [col.upper().strip() for col in df.columns]
+    # Select only the necessary columns
+    tlorder_df = tlorder_df[expected_columns]
+
+    # Standardize column names
+    tlorder_df.columns = [col.upper().strip() for col in tlorder_df.columns]
 
     # Convert numeric columns to appropriate types
-    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
-    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
-    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
+    tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df['CHARGES'], errors='coerce')
+    tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df['XCHARGES'], errors='coerce')
+    tlorder_df['DISTANCE'] = pd.to_numeric(tlorder_df['DISTANCE'], errors='coerce')
 
-    return df
+    return tlorder_df
 
 @st.cache_data
 def preprocess_driverpay(file):
@@ -141,10 +149,15 @@ if uploaded_legsum_file:
     # Optional: Load TLORDER data for BILL_NUMBER and associated fields
     if uploaded_tlorder_file:
         tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+
+        # Debugging step: Check TLORDER data
+        st.write("TLORDER Data Preview:", tlorder_df.head())
+
+        # Merge TLORDER data into LEGSUM
         legsum_df = legsum_df.merge(
-            tlorder_df, 
-            left_on='LS_FREIGHT',  # Merge LEGSUM's LS_FREIGHT with TLORDER's BILL_NUMBER
-            right_on='BILL_NUMBER', 
+            tlorder_df,
+            left_on='LS_FREIGHT',  # Match LEGSUM's LS_FREIGHT with TLORDER's BILL_NUMBER
+            right_on='BILL_NUMBER',
             how='left'
         )
 
