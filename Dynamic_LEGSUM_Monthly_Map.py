@@ -112,9 +112,25 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
+@st.cache_data
+def preprocess_tlorder(file):
+    """
+    Preprocess the TLORDER data to extract necessary columns and ensure data integrity.
+    """
+    df = pd.read_csv(file, low_memory=False)
+    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
+    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
+    df['DISTANCE'] = pd.to_numeric(df['DISTANCE'], errors='coerce')
+    return df[['BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'DISTANCE', 'DISTANCE_UNITS']]
+
 if uploaded_legsum_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
+
+    # Optional: Add TLORDER data if uploaded
+    if uploaded_tlorder_file:
+        tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
     # Optional: Add DRIVERPAY data if uploaded
     if uploaded_driverpay_file:
@@ -124,14 +140,10 @@ if uploaded_legsum_file:
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
     
-    # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
-    
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
+    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists and charges are valid
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
+        pd.notna(legsum_df['BILL_NUMBER']),
+        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
         None  # Set to None if BILL_NUMBER is missing
     )
     
