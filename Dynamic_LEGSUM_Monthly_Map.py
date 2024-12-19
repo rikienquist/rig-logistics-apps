@@ -122,7 +122,6 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-# Main processing
 if uploaded_legsum_file:
     city_coordinates_df = load_city_coordinates()
 
@@ -135,11 +134,7 @@ if uploaded_legsum_file:
     # Merge TLORDER data if available
     if uploaded_tlorder_file:
         tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-
-        # Clean TLORDER keys for merging
         tlorder_df['BILL_NUMBER'] = tlorder_df['BILL_NUMBER'].astype(str).str.strip().str.upper()
-
-        # Perform the merge
         legsum_df = legsum_df.merge(
             tlorder_df,
             left_on='LS_FREIGHT',
@@ -147,12 +142,19 @@ if uploaded_legsum_file:
             how='left'
         )
 
+    # Merge DRIVERPAY data if available
+    if uploaded_driverpay_file:
+        driverpay_agg = preprocess_driverpay(uploaded_driverpay_file)
+        driverpay_agg['BILL_NUMBER'] = driverpay_agg['BILL_NUMBER'].astype(str).str.strip().str.upper()
+        legsum_df = legsum_df.merge(
+            driverpay_agg,
+            left_on='LS_FREIGHT',
+            right_on='BILL_NUMBER',
+            how='left'
+        )
+
     # Add currency conversion for charges
     exchange_rate = 1.38
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce')
-
-    # Calculate TOTAL_CHARGE_CAD considering CURRENCY_CODE
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
         pd.notna(legsum_df['BILL_NUMBER']),
         np.where(
