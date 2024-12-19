@@ -122,16 +122,20 @@ if uploaded_legsum_file:
         legsum_df = legsum_df.merge(driver_pay_agg, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
     # Add currency conversion for charges (if applicable)
-    exchange_rate = 1.38
+    exchange_rate = 1.38  # Conversion rate from USD to CAD
     
     # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
     legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
     legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
     
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
+    # Combine CHARGES and XCHARGES to compute total charges in the appropriate currency
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
+        pd.notna(legsum_df['BILL_NUMBER']),  # Only calculate if BILL_NUMBER exists
+        np.where(
+            legsum_df['CURRENCY_CODE'] == 'USD',  # If charges are in USD, apply conversion
+            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # If in CAD, no conversion
+        ),
         None  # Set to None if BILL_NUMBER is missing
     )
     
