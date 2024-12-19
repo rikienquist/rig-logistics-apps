@@ -38,7 +38,7 @@ uploaded_driverpay_file = st.file_uploader("Upload DRIVERPAY CSV file (optional,
 
 @st.cache_data 
 def load_city_coordinates(): 
-  city_coords = pd.read_csv("location_coordinates.csv") 
+  city_coords = pd.read_csv("trip_map_data/location_coordinates.csv") 
   city_coords.rename(columns={
     "location": "LOCATION", 
     "latitude": "LAT", 
