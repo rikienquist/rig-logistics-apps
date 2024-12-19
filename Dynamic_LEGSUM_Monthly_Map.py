@@ -116,57 +116,49 @@ if uploaded_legsum_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
 
-    # Load TLORDER data if available (for CHARGES, XCHARGES, CURRENCY_CODE)
+    # Optional: Load TLORDER data for additional details
     if uploaded_tlorder_file:
-        tlorder_df = pd.read_csv(uploaded_tlorder_file, low_memory=False)
-        
-        # Ensure CHARGES, XCHARGES, and CURRENCY_CODE are correctly named and processed
-        tlorder_df['CHARGES'] = pd.to_numeric(tlorder_df.get('CHARGES', None), errors='coerce')
-        tlorder_df['XCHARGES'] = pd.to_numeric(tlorder_df.get('XCHARGES', None), errors='coerce')
-        tlorder_df['CURRENCY_CODE'] = tlorder_df.get('CURRENCY_CODE', '').str.upper()
-        
-        # Merge TLORDER data into LEGSUM using BILL_NUMBER
-        legsum_df = legsum_df.merge(
-            tlorder_df[['BILL_NUMBER', 'CHARGES', 'XCHARGES', 'CURRENCY_CODE']],
-            left_on='LS_FREIGHT',
-            right_on='BILL_NUMBER',
-            how='left'
-        )
+        tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
     # Optional: Add DRIVERPAY data if uploaded
     if uploaded_driverpay_file:
         driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
         legsum_df = legsum_df.merge(driver_pay_agg, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
-    # Add currency conversion for charges (if applicable)
+    # Add currency conversion for charges
     exchange_rate = 1.38
 
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists and CHARGES/XCHARGES are present
+    # Ensure CHARGES and XCHARGES are numeric
+    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce')
+    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce')
+
+    # Calculate TOTAL_CHARGE_CAD considering CURRENCY_CODE
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),
+        pd.notna(legsum_df['BILL_NUMBER']),  # Only calculate if BILL_NUMBER exists
         np.where(
-            legsum_df['CURRENCY_CODE'] == 'USD',
-            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Convert USD to CAD
-            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # Keep as CAD if not USD
+            legsum_df['CURRENCY_CODE'] == 'USD',  # Convert USD to CAD
+            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # Assume CAD if not USD
         ),
         None  # Set to None if BILL_NUMBER is missing
     )
 
-    # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
+    # Ensure LS_LEG_DIST is numeric and handle zeros
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
     legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
 
-    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
+    # Calculate Revenue per Mile safely
     legsum_df['Revenue per Mile'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
         legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
         np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
     )
 
-    # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
+    # Calculate Profit (CAD)
     legsum_df['Profit (CAD)'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
-        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),  # Calculate Profit
+        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),
         np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
     )
 
