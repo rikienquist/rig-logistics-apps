@@ -27,8 +27,8 @@ Replace X and Y with the desired date range in form YYYY-MM-DD.
 Save the query results as CSV files and upload them below to visualize the data.
 """)
 
-uploaded_legsum_file = st.file_uploader("Upload LEGSUM CSV file", type="csv")
-uploaded_tlorder_file = st.file_uploader("Upload TLORDER CSV file (optional)", type="csv")
+uploaded_legsumm_file = st.file_uploader("Upload LEGSUM CSV file", type="csv")
+uploaded_tlorder_file = st.file_uploader("Upload TLORDER CSV file", type="csv")
 
 @st.cache_data
 def load_city_coordinates():
