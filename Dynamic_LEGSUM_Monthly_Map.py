@@ -152,11 +152,15 @@ if uploaded_legsum_file:
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
 
-    # Ensure CHARGES and XCHARGES are numeric
+    # Ensure CHARGES and XCHARGES are numeric and single-dimensional
     legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce').fillna(0)
     legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce').fillna(0)
-
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists in TLORDER
+    
+    # Debugging: Verify dimensions
+    st.write("CHARGES Dimension:", legsum_df['CHARGES'].shape)
+    st.write("XCHARGES Dimension:", legsum_df['XCHARGES'].shape)
+    
+    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
         pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
         (legsum_df['CHARGES'] + legsum_df['XCHARGES']) * exchange_rate,  # Sum charges and convert
