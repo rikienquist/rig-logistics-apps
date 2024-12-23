@@ -1,5 +1,3 @@
-### driver pay works but not TLORDER
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -103,10 +101,9 @@ if uploaded_tlorder_file and uploaded_legsum_file:
         (merged_df['LS_LEG_DIST'] > 0)  # Ensure positive leg distances
     ].copy()
 
-    # Calculate additional metrics: Revenue per Mile, Profit
+    # Calculate additional metrics: Revenue per Mile
     valid_routes['Revenue per Mile'] = valid_routes['Total Charge (CAD)'] / valid_routes['LS_LEG_DIST']
-    valid_routes['Profit (CAD)'] = valid_routes['Total Charge (CAD)'] - valid_routes['LS_MT_LOADED']
-
+    
     # Calculate Straight Distance using coordinates
     valid_routes['Straight Distance'] = np.where(
         pd.isna(valid_routes['ORIG_LAT']) | pd.isna(valid_routes['DEST_LAT']),
@@ -155,14 +152,13 @@ if uploaded_tlorder_file and uploaded_legsum_file:
         st.warning("No data available for the selected Power Unit and date range.")
     else:
         # Create the route summary DataFrame
-        filtered_view['Profit (CAD)'] = filtered_view['Total Charge (CAD)'] - filtered_view['LS_MT_LOADED']
         filtered_view['Revenue per Mile'] = filtered_view['Total Charge (CAD)'] / filtered_view['LS_LEG_DIST']
         
         route_summary_df = filtered_view.assign(
             Route=lambda x: x['ORIG_LOCATION'] + " to " + x['DEST_LOCATION']
         )[
             ["Route", "LS_FREIGHT", "LS_TRIP_NUMBER", "LS_LEG_DIST", "LS_MT_LOADED", 
-             "Total Charge (CAD)", "Straight Distance", "Revenue per Mile", "Profit (CAD)", 
+             "Total Charge (CAD)", "Straight Distance", "Revenue per Mile", 
              "LS_ACTUAL_DATE", "LS_LEG_NOTE"]
         ].rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
@@ -183,7 +179,6 @@ if uploaded_tlorder_file and uploaded_legsum_file:
             "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
             "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
             if route_summary_df["Distance (miles)"].sum() != 0 else 0,
-            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
             "LS_ACTUAL_DATE": "",
             "LS_LEG_NOTE": ""
         }])
@@ -191,7 +186,7 @@ if uploaded_tlorder_file and uploaded_legsum_file:
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
     
         # Format currency columns
-        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
+        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
@@ -224,7 +219,6 @@ if uploaded_tlorder_file and uploaded_legsum_file:
         })
     
         city_aggregates['Revenue per Mile'] = city_aggregates['Total Charge (CAD)'] / city_aggregates['LS_LEG_DIST']
-        city_aggregates['Profit (CAD)'] = city_aggregates['Total Charge (CAD)'] - city_aggregates['LS_MT_LOADED']
     
         st.write("City Aggregates:")
         st.dataframe(city_aggregates, use_container_width=True)
@@ -248,14 +242,13 @@ if uploaded_tlorder_file and uploaded_legsum_file:
             destination_sequence = ", ".join(map(str, city_sequence[row['DEST_LOCATION']]))
         
             # Get aggregated values for origin location
-            total_charge, distance, driver_pay, profit, rpm = get_city_aggregates(row['ORIG_LOCATION'], row['DEST_LOCATION'])
+            total_charge, distance, driver_pay, rpm = get_city_aggregates(row['ORIG_LOCATION'], row['DEST_LOCATION'])
             hover_origin_text = (
                 f"Location: {row['ORIG_LOCATION']}<br>"
                 f"Total Charge (CAD): ${total_charge:,.2f}<br>"
                 f"Distance (miles): {distance:,.1f}<br>"
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
             )
         
             # Add origin marker
@@ -280,7 +273,6 @@ if uploaded_tlorder_file and uploaded_legsum_file:
                 f"Distance (miles): {distance:,.1f}<br>"
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
             )
         
             # Add destination marker
