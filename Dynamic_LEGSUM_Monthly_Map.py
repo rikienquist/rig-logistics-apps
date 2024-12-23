@@ -116,7 +116,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     
     # Filter for valid routes, keeping rows with missing coordinates for later processing
     valid_routes = merged_df[
-        (merged_df['ORIGCITY'] != merged_df['DESTCITY']) & 
+        (merged_df['LEGO_ZONE_DESC'] != merged_df['LEGD_ZONE_DESC']) & 
         pd.notna(merged_df['DISTANCE'])
     ].copy()
 
