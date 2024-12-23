@@ -77,7 +77,7 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-if uploaded_tlorder_file and uploaded_driverpay_file:
+if uploaded_legsumm_file and uploaded_tlorder_file:
     city_coordinates_df = load_city_coordinates()
     tlorder_df = preprocess_tlorder(uploaded_tlorder_file, city_coordinates_df)
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
