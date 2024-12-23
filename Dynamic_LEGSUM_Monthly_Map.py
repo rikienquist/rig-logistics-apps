@@ -95,6 +95,10 @@ def calculate_haversine(df):
     a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
+st.write("LEGSUM Columns:", legsum_df.columns.tolist())
+st.write("TLORDER Columns:", tlorder_df.columns.tolist())
+st.write("DRIVERPAY Columns:", driverpay_df.columns.tolist())
+
 
 if uploaded_legsum_file and uploaded_tlorder_file and uploaded_driverpay_file:
     # Load city coordinates
