@@ -107,10 +107,13 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     # Preprocess DRIVERPAY data
     driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
     driver_pay_agg.rename(columns={'BILL_NUMBER': 'BILL_NUMBER_DRIVERPAY'}, inplace=True)
-
+    
     # Merge TLORDER with DRIVERPAY on BILL_NUMBER
     merged_df = tlorder_df.merge(driver_pay_agg, left_on='BILL_NUMBER_TLORDER', right_on='BILL_NUMBER_DRIVERPAY', how='left')
 
+    # Ensure TOTAL_PAY_AMT column exists and fill missing values with 0
+    merged_df['TOTAL_PAY_AMT'] = merged_df['TOTAL_PAY_AMT'].fillna(0)
+    
     # Filter for valid routes, keeping rows with missing coordinates for later processing
     valid_routes = merged_df[
         (merged_df['ORIGCITY'] != merged_df['DESTCITY']) & 
@@ -130,8 +133,12 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     # Filter for routes with non-zero charges
     filtered_df = valid_routes[valid_routes['TOTAL_CHARGE_CAD'] != 0].copy()
 
-    # Fill missing PICK_UP_PUNIT values and calculate additional metrics
+    # Ensure PICK_UP_PUNIT column exists and fill missing values
+    if 'PICK_UP_PUNIT' not in filtered_df.columns:
+        filtered_df['PICK_UP_PUNIT'] = "Unknown"
     filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
+
+    # Calculate additional metrics
     filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
     filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
