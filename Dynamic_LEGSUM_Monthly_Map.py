@@ -97,35 +97,39 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-if uploaded_tlorder_file and uploaded_driverpay_file:
+if uploaded_legsum_file:
+    # Load and preprocess LEGSUM data
     city_coordinates_df = load_city_coordinates()
+    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     
-    # Preprocess TLORDER data
-    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-    tlorder_df.rename(columns={'BILL_NUMBER': 'BILL_NUMBER_TLORDER'}, inplace=True)
+    # Preprocess TLORDER and DRIVERPAY data if provided
+    if uploaded_tlorder_file:
+        tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
+        tlorder_df.rename(columns={'BILL_NUMBER': 'BILL_NUMBER_TLORDER'}, inplace=True)
+        # Merge TLORDER with LEGSUM on LS_FREIGHT and BILL_NUMBER
+        legsum_df = legsum_df.merge(tlorder_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER_TLORDER', how='left')
     
-    # Preprocess DRIVERPAY data
-    driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
-    driver_pay_agg.rename(columns={'BILL_NUMBER': 'BILL_NUMBER_DRIVERPAY'}, inplace=True)
-    
-    # Merge TLORDER with DRIVERPAY on BILL_NUMBER
-    merged_df = tlorder_df.merge(driver_pay_agg, left_on='BILL_NUMBER_TLORDER', right_on='BILL_NUMBER_DRIVERPAY', how='left')
+    if uploaded_driverpay_file:
+        driverpay_df = preprocess_driverpay(uploaded_driverpay_file)
+        driverpay_df.rename(columns={'BILL_NUMBER': 'BILL_NUMBER_DRIVERPAY'}, inplace=True)
+        # Merge DRIVERPAY with LEGSUM on LS_FREIGHT and BILL_NUMBER
+        legsum_df = legsum_df.merge(driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER_DRIVERPAY', how='left')
 
     # Ensure TOTAL_PAY_AMT column exists and fill missing values with 0
-    merged_df['TOTAL_PAY_AMT'] = merged_df['TOTAL_PAY_AMT'].fillna(0)
-    
-    # Filter for valid routes, keeping rows with missing coordinates for later processing
-    valid_routes = merged_df[
-        (merged_df['LEGO_ZONE_DESC'] != merged_df['LEGD_ZONE_DESC']) & 
-        pd.notna(merged_df['DISTANCE'])
+    legsum_df['TOTAL_PAY_AMT'] = legsum_df['TOTAL_PAY_AMT'].fillna(0)
+
+    # Filter for valid routes based on LEGO_ZONE_DESC and LEGD_ZONE_DESC
+    valid_routes = legsum_df[
+        (legsum_df['LEGO_ZONE_DESC'] != legsum_df['LEGD_ZONE_DESC']) & 
+        pd.notna(legsum_df['LS_LEG_DIST'])
     ].copy()
 
     # Convert charges to numeric and calculate total charge in CAD
     exchange_rate = 1.38
-    valid_routes['CHARGES'] = pd.to_numeric(valid_routes['CHARGES'], errors='coerce')
-    valid_routes['XCHARGES'] = pd.to_numeric(valid_routes['XCHARGES'], errors='coerce')
+    valid_routes['CHARGES'] = pd.to_numeric(valid_routes.get('CHARGES', 0), errors='coerce')
+    valid_routes['XCHARGES'] = pd.to_numeric(valid_routes.get('XCHARGES', 0), errors='coerce')
     valid_routes['TOTAL_CHARGE_CAD'] = np.where(
-        valid_routes['CURRENCY_CODE'] == 'USD',
+        valid_routes.get('CURRENCY_CODE') == 'USD',
         (valid_routes['CHARGES'] + valid_routes['XCHARGES']) * exchange_rate,
         valid_routes['CHARGES'] + valid_routes['XCHARGES']
     )
@@ -139,7 +143,7 @@ if uploaded_tlorder_file and uploaded_driverpay_file:
     filtered_df['PICK_UP_PUNIT'] = filtered_df['PICK_UP_PUNIT'].fillna("Unknown").astype(str)
 
     # Calculate additional metrics
-    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['DISTANCE']
+    filtered_df['Revenue per Mile'] = filtered_df['TOTAL_CHARGE_CAD'] / filtered_df['LS_LEG_DIST']
     filtered_df['Profit (CAD)'] = filtered_df['TOTAL_CHARGE_CAD'] - filtered_df['TOTAL_PAY_AMT']
 
     # Handle effective date and create a "Month" column
