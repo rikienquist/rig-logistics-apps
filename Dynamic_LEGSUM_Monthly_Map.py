@@ -152,20 +152,20 @@ if uploaded_legsum_file:
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
 
-    # Ensure CHARGES and XCHARGES are numeric and single-dimensional
+    # Ensure CHARGES and XCHARGES are valid
     legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce').fillna(0)
     legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce').fillna(0)
     
-    # Debugging: Verify dimensions
-    st.write("CHARGES Dimension:", legsum_df['CHARGES'].shape)
-    st.write("XCHARGES Dimension:", legsum_df['XCHARGES'].shape)
-    
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
-    legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (legsum_df['CHARGES'] + legsum_df['XCHARGES']) * exchange_rate,  # Sum charges and convert
-        np.nan  # Set to NaN if BILL_NUMBER is missing
-    )
+    # Calculate TOTAL_CHARGE_CAD safely
+    try:
+        legsum_df['TOTAL_CHARGE_CAD'] = np.where(
+            pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
+            (legsum_df['CHARGES'] + legsum_df['XCHARGES']) * exchange_rate,  # Sum charges and convert
+            np.nan  # Set to NaN if BILL_NUMBER is missing
+        )
+    except ValueError as e:
+        st.error(f"Error in TOTAL_CHARGE_CAD calculation: {e}")
+        st.stop()
 
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
