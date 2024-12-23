@@ -88,10 +88,27 @@ def filter_and_enrich_locations(df, city_coords):
     return enriched_locations
 
 @st.cache_data
-def preprocess_driverpay(file):
+def preprocess_tlorder(file):
+    """
+    Preprocess the TLORDER dataset by renaming the BILL_NUMBER column to TLORDER_BILL_NUMBER
+    to avoid conflicts during merging.
+    """
     df = pd.read_csv(file, low_memory=False)
+    df.rename(columns={"BILL_NUMBER": "TLORDER_BILL_NUMBER"}, inplace=True)
+    df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
+    df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
+    return df
+
+@st.cache_data
+def preprocess_driverpay(file):
+    """
+    Preprocess the DRIVERPAY dataset by renaming the BILL_NUMBER column to DRIVERPAY_BILL_NUMBER
+    and aggregating pay data for merging.
+    """
+    df = pd.read_csv(file, low_memory=False)
+    df.rename(columns={"BILL_NUMBER": "DRIVERPAY_BILL_NUMBER"}, inplace=True)
     df['TOTAL_PAY_AMT'] = pd.to_numeric(df['TOTAL_PAY_AMT'], errors='coerce')
-    driver_pay_agg = df.groupby('BILL_NUMBER').agg({
+    driver_pay_agg = df.groupby('DRIVERPAY_BILL_NUMBER').agg({
         'TOTAL_PAY_AMT': 'sum',
         'DRIVER_ID': 'first'
     }).reset_index()
@@ -113,58 +130,58 @@ def calculate_haversine(df):
     return R * c
 
 if uploaded_legsum_file and uploaded_tlorder_file and uploaded_driverpay_file:
+    # Load city coordinates
     city_coordinates_df = load_city_coordinates()
-    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
-    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
-    driverpay_df = preprocess_driverpay(uploaded_driverpay_file)
 
-    # Merge DRIVERPAY and TLORDER data with LEGSUM using LS_FREIGHT
+    # Preprocess the LEGSUM dataset
+    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
+
+    # Preprocess and merge TLORDER
+    tlorder_df = preprocess_tlorder(uploaded_tlorder_file)
     legsum_df = legsum_df.merge(
-        tlorder_df.rename(columns={"TLORDER_BILL_NUMBER": "BILL_NUMBER"}), 
-        left_on='LS_FREIGHT', 
-        right_on='BILL_NUMBER', 
-        how='left'
+        tlorder_df, left_on='LS_FREIGHT', right_on='TLORDER_BILL_NUMBER', how='left'
     )
+
+    # Preprocess and merge DRIVERPAY
+    driver_pay_agg = preprocess_driverpay(uploaded_driverpay_file)
     legsum_df = legsum_df.merge(
-        driverpay_df.rename(columns={"DRIVERPAY_BILL_NUMBER": "BILL_NUMBER"}), 
-        on='BILL_NUMBER', 
-        how='left'
+        driver_pay_agg, left_on='LS_FREIGHT', right_on='DRIVERPAY_BILL_NUMBER', how='left'
     )
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38
 
     # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
-    legsum_df['CHARGES'] = pd.to_numeric(legsum_df.get('CHARGES', None), errors='coerce')
-    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df.get('XCHARGES', None), errors='coerce')
+    legsum_df['CHARGES'] = pd.to_numeric(legsum_df['CHARGES'], errors='coerce')
+    legsum_df['XCHARGES'] = pd.to_numeric(legsum_df['XCHARGES'], errors='coerce')
 
-    # Calculate TOTAL_CHARGE_CAD
+    # Calculate TOTAL_CHARGE_CAD for rows where TLORDER_BILL_NUMBER exists
     legsum_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(legsum_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
+        pd.notna(legsum_df['TLORDER_BILL_NUMBER']),
         np.where(
             legsum_df['CURRENCY_CODE'] == 'USD',
-            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,  # Convert from USD
-            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)  # Keep in CAD
+            (legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)) * exchange_rate,
+            legsum_df['CHARGES'].fillna(0) + legsum_df['XCHARGES'].fillna(0)
         ),
-        None  # Set to None if BILL_NUMBER is missing
+        np.nan
     )
 
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
     legsum_df['LS_LEG_DIST'] = pd.to_numeric(legsum_df['LS_LEG_DIST'], errors='coerce')
     legsum_df['LS_LEG_DIST'] = np.where(legsum_df['LS_LEG_DIST'] > 0, legsum_df['LS_LEG_DIST'], np.nan)
 
-    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
+    # Calculate Revenue per Mile safely
     legsum_df['Revenue per Mile'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']) & pd.notna(legsum_df['LS_LEG_DIST']),
-        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],  # Calculate RPM
-        np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
+        legsum_df['TOTAL_CHARGE_CAD'] / legsum_df['LS_LEG_DIST'],
+        np.nan
     )
 
     # Calculate Profit (CAD)
     legsum_df['Profit (CAD)'] = np.where(
         pd.notna(legsum_df['TOTAL_CHARGE_CAD']),
-        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),  # Calculate Profit
-        np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
+        legsum_df['TOTAL_CHARGE_CAD'] - legsum_df['TOTAL_PAY_AMT'].fillna(0),
+        np.nan
     )
 
     # Add a Month column for grouping
@@ -188,11 +205,11 @@ if uploaded_legsum_file and uploaded_tlorder_file and uploaded_driverpay_file:
         calculate_haversine(legsum_df)
     )
 
+    # Filter by Power Unit and Driver
     legsum_df['LS_POWER_UNIT'] = legsum_df['LS_POWER_UNIT'].astype(str)
     punit_options = sorted(legsum_df['LS_POWER_UNIT'].unique())
     selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
     
-    # Filter data for the selected power unit
     relevant_drivers = legsum_df[legsum_df['LS_POWER_UNIT'] == selected_punit]['DRIVER_ID'].unique()
     driver_options = ["All"] + sorted(relevant_drivers.astype(str))
     selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
@@ -201,218 +218,227 @@ if uploaded_legsum_file and uploaded_tlorder_file and uploaded_driverpay_file:
     if selected_driver != "All":
         filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
     
-    # Filter by LS_ACTUAL_DATE instead of Month
-    start_date = st.date_input("Select Start Date", value=pd.Timestamp.now() - pd.DateOffset(months=1))
-    end_date = st.date_input("Select End Date", value=pd.Timestamp.now())
-    filtered_view = filtered_view[
-        (filtered_view['LS_ACTUAL_DATE'] >= pd.Timestamp(start_date)) &
-        (filtered_view['LS_ACTUAL_DATE'] <= pd.Timestamp(end_date))
-    ]
-    
-    if filtered_view.empty:
-        st.warning("No data available for the selected Power Unit, Driver ID, and date range.")
-    else:
-        # Assign colors for alternating rows by day
-        filtered_view = filtered_view.sort_values(by='LS_ACTUAL_DATE')
-        filtered_view['Day_Group'] = filtered_view['LS_ACTUAL_DATE'].dt.date
-        unique_days = list(filtered_view['Day_Group'].unique())
-        day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
-        filtered_view['Highlight'] = filtered_view['Day_Group'].map(day_colors)
-    
-        # Create the route summary DataFrame
-        filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_AMT']
-    
-        route_summary_df = filtered_view.assign(
-            Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
-        )[
-            [
-                "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Straight Distance",
-                "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
-            ]
-        ].rename(columns={
-            "LS_FREIGHT": "BILL_NUMBER",
-            "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
-            "LS_LEG_DIST": "Distance (miles)",
-            "Straight Distance": "Straight Distance (miles)",
-            "TOTAL_PAY_AMT": "Driver Pay (CAD)"
-        })
-    
-        # Calculate grand totals
-        grand_totals = pd.DataFrame([{
-            "Route": "Grand Totals",
-            "BILL_NUMBER": "",
-            "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
-            "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
-            "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
-            "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
-            if route_summary_df["Distance (miles)"].sum() != 0 else 0,
-            "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
-            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
-            "LS_ACTUAL_DATE": "",
-            "LS_LEG_NOTE": "",
-            "Highlight": None
-        }])
-    
-        route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-    
-        # Format currency columns
-        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
-            route_summary_df[col] = route_summary_df[col].apply(
-                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
-            )
-    
-        # Define row styling
-        def highlight_rows(row):
-            if row['Route'] == "Grand Totals":
-                return ['background-color: #f7c8c8'] * len(row)
-            elif row['Highlight'] == 1:
-                return ['background-color: #c8e0f7'] * len(row)
-            else:
-                return ['background-color: #f7f7c8'] * len(row)
-    
-        styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
-        st.write("Route Summary:")
-        st.dataframe(styled_route_summary, use_container_width=True)
-    
-        # Combine origins and destinations for aggregated totals
-        location_aggregates = pd.concat([
-            filtered_view[['LEGO_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'LS_LEG_DIST', 'TOTAL_PAY_AMT']].rename(
-                columns={'LEGO_ZONE_DESC': 'Location'}
-            ),
-            filtered_view[['LEGD_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'LS_LEG_DIST', 'TOTAL_PAY_AMT']].rename(
-                columns={'LEGD_ZONE_DESC': 'Location'}
-            )
-        ], ignore_index=True)
-    
-        # Clean and aggregate the combined data
-        location_aggregates = location_aggregates.groupby(['Location'], as_index=False).agg({
-            'TOTAL_CHARGE_CAD': 'sum',
-            'LS_LEG_DIST': 'sum',
-            'TOTAL_PAY_AMT': 'sum'
-        })
-    
-        location_aggregates['Revenue per Mile'] = location_aggregates['TOTAL_CHARGE_CAD'] / location_aggregates['LS_LEG_DIST']
-        location_aggregates['Profit (CAD)'] = location_aggregates['TOTAL_CHARGE_CAD'] - location_aggregates['TOTAL_PAY_AMT'].fillna(0)
-    
-        # Function to fetch aggregate values for a location
-        def get_location_aggregates(location):
-            match = location_aggregates[location_aggregates['Location'] == location]
-            if not match.empty:
-                total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
-                distance = match['LS_LEG_DIST'].iloc[0]
-                driver_pay = match['TOTAL_PAY_AMT'].iloc[0]
-                profit = match['Profit (CAD)'].iloc[0]
-                rpm = match['Revenue per Mile'].iloc[0]
-                return total_charge, distance, driver_pay, profit, rpm
-            return 0, 0, 0, 0, 0
-
-        # Generate the map
-        fig = go.Figure()
-        
-        # Track sequence of location appearance
-        location_sequence = {location: [] for location in set(filtered_view['LEGO_ZONE_DESC']).union(filtered_view['LEGD_ZONE_DESC'])}
-        label_counter = 1
-        for _, row in filtered_view.iterrows():
-            location_sequence[row['LEGO_ZONE_DESC']].append(label_counter)
-            label_counter += 1
-            location_sequence[row['LEGD_ZONE_DESC']].append(label_counter)
-            label_counter += 1
-        
-        legend_added = {"Origin": False, "Destination": False, "Route": False}
-        
-        for _, row in filtered_view.iterrows():
-            origin_sequence = ", ".join(map(str, location_sequence[row['LEGO_ZONE_DESC']]))
-            destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
-        
-            # Get aggregated values for origin location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
-            hover_origin_text = (
-                f"Location: {row['LEGO_ZONE_DESC']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
-                f"Revenue per Mile: ${rpm:,.2f}<br>"
-                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
-            )
-        
-            # Add origin marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['LEGO_LON']],
-                lat=[row['LEGO_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="blue"),
-                text=origin_sequence,
-                textposition="top right",
-                name="Origin" if not legend_added["Origin"] else None,
-                hoverinfo="text",
-                hovertext=hover_origin_text,
-                showlegend=not legend_added["Origin"]
-            ))
-            legend_added["Origin"] = True
-        
-            # Get aggregated values for destination location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
-            hover_dest_text = (
-                f"Location: {row['LEGD_ZONE_DESC']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
-                f"Revenue per Mile: ${rpm:,.2f}<br>"
-                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
-            )
-        
-            # Add destination marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['LEGD_LON']],
-                lat=[row['LEGD_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="red"),
-                text=destination_sequence,
-                textposition="top right",
-                name="Destination" if not legend_added["Destination"] else None,
-                hoverinfo="text",
-                hovertext=hover_dest_text,
-                showlegend=not legend_added["Destination"]
-            ))
-            legend_added["Destination"] = True
-        
-            # Add route line
-            fig.add_trace(go.Scattergeo(
-                lon=[row['LEGO_LON'], row['LEGD_LON']],
-                lat=[row['LEGO_LAT'], row['LEGD_LAT']],
-                mode="lines",
-                line=dict(width=2, color="green"),
-                name="Route" if not legend_added["Route"] else None,
-                hoverinfo="skip",
-                showlegend=not legend_added["Route"]
-            ))
-            legend_added["Route"] = True
-        
-        fig.update_layout(
-            title=f"Routes for {start_date} to {end_date} - Power Unit: {selected_punit}, Driver ID: {selected_driver}",
-            geo=dict(scope="north america", projection_type="mercator"),
-        )
-        st.plotly_chart(fig)
-        
-        # Display locations missing coordinates relevant to the selection
-        relevant_missing_origins = filtered_view[
-            (pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON']))
-        ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
-        
-        relevant_missing_destinations = filtered_view[
-            (pd.isna(filtered_view['LEGD_LAT']) | pd.isna(filtered_view['LEGD_LON']))
-        ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
-        
-        relevant_missing_locations = pd.concat([relevant_missing_origins, relevant_missing_destinations]).drop_duplicates()
-        
-        if not relevant_missing_locations.empty:
-            st.write("### Locations Missing Coordinates")
-            st.dataframe(relevant_missing_locations, use_container_width=True)
-        
-    else:
+    # Filter by available months
+    months = sorted(filtered_view['Month'].unique())
+    if len(months) == 0:
         st.warning("No data available for the selected Power Unit and Driver ID.")
+    else:
+        if "selected_month" not in st.session_state or st.session_state.selected_month not in months:
+            st.session_state.selected_month = months[0]
+        selected_month = st.selectbox("Select Month:", options=months, index=months.index(st.session_state.selected_month))
+        st.session_state.selected_month = selected_month
+    
+        month_data = filtered_view[filtered_view['Month'] == selected_month].copy()
+    
+        if not month_data.empty:
+            # Assign colors for alternating rows by day
+            month_data = month_data.sort_values(by='LS_ACTUAL_DATE')
+            month_data['Day_Group'] = month_data['LS_ACTUAL_DATE'].dt.date
+            unique_days = list(month_data['Day_Group'].unique())
+            day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
+            month_data['Highlight'] = month_data['Day_Group'].map(day_colors)
+    
+            # Prepare the route summary DataFrame
+            month_data['Profit (CAD)'] = month_data['TOTAL_CHARGE_CAD'] - month_data['TOTAL_PAY_AMT']
+    
+            route_summary_df = month_data.assign(
+                Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
+            )[
+                [
+                    "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Straight Distance",
+                    "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_AMT", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
+                ]
+            ].rename(columns={
+                "LS_FREIGHT": "BILL_NUMBER",
+                "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
+                "LS_LEG_DIST": "Distance (miles)",
+                "Straight Distance": "Straight Distance (miles)",
+                "TOTAL_PAY_AMT": "Driver Pay (CAD)"
+            })
+    
+            # Calculate grand totals
+            grand_totals = pd.DataFrame([{
+                "Route": "Grand Totals",
+                "BILL_NUMBER": "",
+                "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
+                "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
+                "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
+                "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
+                if route_summary_df["Distance (miles)"].sum() != 0 else 0,
+                "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
+                "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
+                "LS_ACTUAL_DATE": "",
+                "LS_LEG_NOTE": "",
+                "Highlight": None
+            }])
+    
+            route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
+    
+            # Format currency columns
+            for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
+                route_summary_df[col] = route_summary_df[col].apply(
+                    lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+                )
+    
+            # Define row styling
+            def highlight_rows(row):
+                if row['Route'] == "Grand Totals":
+                    return ['background-color: #f7c8c8'] * len(row)
+                elif row['Highlight'] == 1:
+                    return ['background-color: #c8e0f7'] * len(row)
+                else:
+                    return ['background-color: #f7f7c8'] * len(row)
+    
+            styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
+            st.write("Route Summary:")
+            st.dataframe(styled_route_summary, use_container_width=True)
+    
+            # Combine origins and destinations for aggregated totals
+            location_aggregates = pd.concat([
+                month_data[['LEGO_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'LS_LEG_DIST', 'TOTAL_PAY_AMT']].rename(
+                    columns={'LEGO_ZONE_DESC': 'Location'}
+                ),
+                month_data[['LEGD_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'LS_LEG_DIST', 'TOTAL_PAY_AMT']].rename(
+                    columns={'LEGD_ZONE_DESC': 'Location'}
+                )
+            ], ignore_index=True)
+    
+            # Clean and aggregate the combined data
+            location_aggregates = location_aggregates.groupby(['Location'], as_index=False).agg({
+                'TOTAL_CHARGE_CAD': 'sum',
+                'LS_LEG_DIST': 'sum',
+                'TOTAL_PAY_AMT': 'sum'
+            })
+    
+            location_aggregates['Revenue per Mile'] = location_aggregates['TOTAL_CHARGE_CAD'] / location_aggregates['LS_LEG_DIST']
+            location_aggregates['Profit (CAD)'] = location_aggregates['TOTAL_CHARGE_CAD'] - location_aggregates['TOTAL_PAY_AMT'].fillna(0)
+    
+            # Function to fetch aggregate values for a location
+            def get_location_aggregates(location):
+                match = location_aggregates[location_aggregates['Location'] == location]
+                if not match.empty:
+                    total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
+                    distance = match['LS_LEG_DIST'].iloc[0]
+                    driver_pay = match['TOTAL_PAY_AMT'].iloc[0]
+                    profit = match['Profit (CAD)'].iloc[0]
+                    rpm = match['Revenue per Mile'].iloc[0]
+                    return total_charge, distance, driver_pay, profit, rpm
+                return 0, 0, 0, 0, 0
+
+            # Generate the map
+            fig = go.Figure()
+            
+            # Track sequence of location appearance
+            location_sequence = {location: [] for location in set(month_data['LEGO_ZONE_DESC']).union(month_data['LEGD_ZONE_DESC'])}
+            label_counter = 1
+            for _, row in month_data.iterrows():
+                location_sequence[row['LEGO_ZONE_DESC']].append(label_counter)
+                label_counter += 1
+                location_sequence[row['LEGD_ZONE_DESC']].append(label_counter)
+                label_counter += 1
+            
+            legend_added = {"Origin": False, "Destination": False, "Route": False}
+            
+            for _, row in month_data.iterrows():
+                origin_sequence = ", ".join(map(str, location_sequence[row['LEGO_ZONE_DESC']]))
+                destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
+            
+                # Get aggregated values for origin location
+                total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
+                hover_origin_text = (
+                    f"Location: {row['LEGO_ZONE_DESC']}<br>"
+                    f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                    f"Distance (miles): {distance:,.1f}<br>"
+                    f"Revenue per Mile: ${rpm:,.2f}<br>"
+                    f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                    f"Profit (CAD): ${profit:,.2f}"
+                )
+            
+                # Add origin marker
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['LEGO_LON']],
+                    lat=[row['LEGO_LAT']],
+                    mode="markers+text",
+                    marker=dict(size=8, color="blue"),
+                    text=origin_sequence,
+                    textposition="top right",
+                    name="Origin" if not legend_added["Origin"] else None,
+                    hoverinfo="text",
+                    hovertext=hover_origin_text,
+                    showlegend=not legend_added["Origin"]
+                ))
+                legend_added["Origin"] = True
+            
+                # Get aggregated values for destination location
+                total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
+                hover_dest_text = (
+                    f"Location: {row['LEGD_ZONE_DESC']}<br>"
+                    f"Total Charge (CAD): ${total_charge:,.2f}<br>"
+                    f"Distance (miles): {distance:,.1f}<br>"
+                    f"Revenue per Mile: ${rpm:,.2f}<br>"
+                    f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
+                    f"Profit (CAD): ${profit:,.2f}"
+                )
+            
+                # Add destination marker
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['LEGD_LON']],
+                    lat=[row['LEGD_LAT']],
+                    mode="markers+text",
+                    marker=dict(size=8, color="red"),
+                    text=destination_sequence,
+                    textposition="top right",
+                    name="Destination" if not legend_added["Destination"] else None,
+                    hoverinfo="text",
+                    hovertext=hover_dest_text,
+                    showlegend=not legend_added["Destination"]
+                ))
+                legend_added["Destination"] = True
+            
+                # Add route line
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['LEGO_LON'], row['LEGD_LON']],
+                    lat=[row['LEGO_LAT'], row['LEGD_LAT']],
+                    mode="lines",
+                    line=dict(width=2, color="green"),
+                    name="Route" if not legend_added["Route"] else None,
+                    hoverinfo="skip",
+                    showlegend=not legend_added["Route"]
+                ))
+                legend_added["Route"] = True
+            
+            fig.update_layout(
+                title=f"Routes for {selected_month} - Power Unit: {selected_punit}, Driver ID: {selected_driver}",
+                geo=dict(scope="north america", projection_type="mercator"),
+            )
+            st.plotly_chart(fig)
+            
+            # Display locations missing coordinates relevant to the selection
+            relevant_missing_origins = month_data[
+                (pd.isna(month_data['LEGO_LAT']) | pd.isna(month_data['LEGO_LON']))
+            ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
+            
+            relevant_missing_destinations = month_data[
+                (pd.isna(month_data['LEGD_LAT']) | pd.isna(month_data['LEGD_LON']))
+            ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
+            
+            relevant_missing_locations = pd.concat([relevant_missing_origins, relevant_missing_destinations]).drop_duplicates()
+            
+            if not relevant_missing_locations.empty:
+                st.write("### Locations Missing Coordinates")
+                st.dataframe(relevant_missing_locations, use_container_width=True)
+            
+        else:
+            st.warning("No data available for the selected Power Unit and Driver ID.")
+            
 else:
-    st.warning("Please upload LEGSUM, TLORDER and DRIVERPAY CSV files to proceed.")
+    st.error("All three datasets (LEGSUM, TLORDER, and DRIVERPAY) are required. Please upload the files.")
+
+
+
+
+
+
 
 
 
