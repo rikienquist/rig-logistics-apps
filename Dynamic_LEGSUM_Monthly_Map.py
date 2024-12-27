@@ -44,7 +44,22 @@ def load_city_coordinates():
 
 @st.cache_data
 def preprocess_legsum(file, city_coords):
-    df = pd.read_csv(file, low_memory=False)
+    # Check if the uploaded file is empty
+    if file is None or file.size == 0:
+        st.error("The uploaded LEGSUM file is empty or invalid. Please upload a valid file.")
+        return pd.DataFrame()  # Return an empty DataFrame to prevent further errors
+
+    # Try reading the CSV, handle parsing errors gracefully
+    try:
+        df = pd.read_csv(file, low_memory=False)
+    except pd.errors.EmptyDataError:
+        st.error("The uploaded LEGSUM file is empty. Please upload a valid file.")
+        return pd.DataFrame()
+    except pd.errors.ParserError:
+        st.error("There was an error parsing the LEGSUM file. Please ensure it is a valid CSV file.")
+        return pd.DataFrame()
+
+    # Process the DataFrame
     df['LS_ACTUAL_DATE'] = pd.to_datetime(df['LS_ACTUAL_DATE'], errors='coerce')
 
     # Standardize location names
