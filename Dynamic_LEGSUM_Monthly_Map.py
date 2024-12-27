@@ -180,13 +180,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             'TOTAL_PAY_SUM', 'Profit', 'LS_ACTUAL_DATE', 'LS_LEG_NOTE'
         ]].copy()
 
-        # Format numeric columns
-        route_summary_df['TOTAL_CHARGE_CAD'] = route_summary_df['TOTAL_CHARGE_CAD'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
-        route_summary_df['TOTAL_PAY_SUM'] = route_summary_df['TOTAL_PAY_SUM'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
-        route_summary_df['Profit'] = route_summary_df['Profit'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
-        route_summary_df['Revenue per Mile'] = route_summary_df['Revenue per Mile'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
-        route_summary_df['LS_LEG_DIST'] = route_summary_df['LS_LEG_DIST'].apply(lambda x: f"{float(x):,.1f}" if pd.notna(x) else "0.0")
-        route_summary_df['Straight Distance'] = route_summary_df['Straight Distance'].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "0.0")
+        # Ensure columns are numeric and fill NaN values
+       numeric_columns = ['LS_LEG_DIST', 'Straight Distance', 'TOTAL_CHARGE_CAD', 'TOTAL_PAY_SUM', 'Profit', 'Revenue per Mile']
+       for col in numeric_columns:
+           route_summary_df[col] = pd.to_numeric(route_summary_df[col], errors='coerce').fillna(0)
+       
+       # Format numeric columns
+       route_summary_df['TOTAL_CHARGE_CAD'] = route_summary_df['TOTAL_CHARGE_CAD'].apply(lambda x: f"${x:,.2f}")
+       route_summary_df['TOTAL_PAY_SUM'] = route_summary_df['TOTAL_PAY_SUM'].apply(lambda x: f"${x:,.2f}")
+       route_summary_df['Profit'] = route_summary_df['Profit'].apply(lambda x: f"${x:,.2f}")
+       route_summary_df['Revenue per Mile'] = route_summary_df['Revenue per Mile'].apply(lambda x: f"${x:,.2f}")
+       route_summary_df['LS_LEG_DIST'] = route_summary_df['LS_LEG_DIST'].apply(lambda x: f"{x:,.1f}")
+       route_summary_df['Straight Distance'] = route_summary_df['Straight Distance'].apply(lambda x: f"{x:,.1f}")
         
         # Calculate totals
         totals = pd.DataFrame([{
