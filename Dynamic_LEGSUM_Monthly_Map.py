@@ -312,11 +312,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
         
             # Get aggregated values for origin location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
+            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
             hover_origin_text = (
                 f"Location: {row['LEGO_ZONE_DESC']}<br>"
                 f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
+                f"Bill Distance (miles): {bill_distance:,.1f}<br>"
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
@@ -338,11 +338,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             legend_added["Origin"] = True
         
             # Get aggregated values for destination location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
+            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
             hover_dest_text = (
                 f"Location: {row['LEGD_ZONE_DESC']}<br>"
                 f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
+                f"Bill Distance (miles): {bill_distance:,.1f}<br>"
                 f"Revenue per Mile: ${rpm:,.2f}<br>"
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
