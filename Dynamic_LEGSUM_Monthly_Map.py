@@ -154,7 +154,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     )
 
     # Add truck unit selection
-    punit_options = sorted(filtered_df['LS_POWER_UNIT'].unique())
+    punit_options = sorted(filtered_df['LS_POWER_UNIT'].astype(str).unique())
     selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
     
     # Add driver selection
