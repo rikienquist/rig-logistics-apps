@@ -403,5 +403,4 @@ else:
         st.write("### Locations Missing Coordinates")
         st.dataframe(missing_locations, use_container_width=True)
 
-else:
-    st.warning("Please upload LEGSUMTLORDER+DRIVERPAY CSV files to proceed.")
+
