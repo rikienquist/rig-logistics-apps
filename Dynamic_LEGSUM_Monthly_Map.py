@@ -113,7 +113,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
 
     # Convert LS_ACTUAL_DATE to datetime
-    legsum_df['LS_ACTUAL_DATE'] = pd.to_datetime(legsum_df['LS_ACTUAL_DATE'])
+    legsum_df['LS_ACTUAL_DATE'] = pd.to_datetime(legsum_df['LS_ACTUAL_DATE'], format='mixed', errors='coerce')
 
     # Date range selector
     min_date = legsum_df['LS_ACTUAL_DATE'].min().date()
