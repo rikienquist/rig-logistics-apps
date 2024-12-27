@@ -97,11 +97,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
-    
+
     # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
     merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce')
     merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce')
-    
+
     # Calculate TOTAL_CHARGE_CAD based on CURRENCY_CODE
     merged_df['TOTAL_CHARGE_CAD'] = np.where(
         merged_df['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
@@ -109,15 +109,25 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)  # Use original values if not USD
     )
 
-    # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
-    merged_df['LS_LEG_DIST'] = pd.to_numeric(merged_df['LS_LEG_DIST'], errors='coerce')
+    # Ensure LS_LEG_DIST and DISTANCE are numeric
+    merged_df['LS_LEG_DIST'] = pd.to_numeric(merged_df['LS_LEG_DIST'], errors='coerce')  # Leg Distance
+    merged_df['DISTANCE'] = pd.to_numeric(merged_df['DISTANCE'], errors='coerce')  # Bill Distance
+
+    # Adjust DISTANCE based on DISTANCE_UNITS (convert KM to miles if applicable)
+    merged_df['Bill Distance (miles)'] = np.where(
+        merged_df['DISTANCE_UNITS'] == 'KM',
+        merged_df['DISTANCE'] * 0.62,  # Convert KM to miles
+        merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
+    )
+
+    # Ensure LS_LEG_DIST is positive or assign NaN for invalid values
     merged_df['LS_LEG_DIST'] = np.where(merged_df['LS_LEG_DIST'] > 0, merged_df['LS_LEG_DIST'], np.nan)
 
-    # Calculate Revenue per Mile safely, only if LS_LEG_DIST > 0
+    # Calculate Revenue per Mile based on Bill Distance
     merged_df['Revenue per Mile'] = np.where(
-        pd.notna(merged_df['TOTAL_CHARGE_CAD']) & pd.notna(merged_df['LS_LEG_DIST']),
-        merged_df['TOTAL_CHARGE_CAD'] / merged_df['LS_LEG_DIST'],  # Calculate RPM
-        np.nan  # Assign NaN if distance is zero or TOTAL_CHARGE_CAD is missing
+        pd.notna(merged_df['TOTAL_CHARGE_CAD']) & pd.notna(merged_df['Bill Distance (miles)']) & (merged_df['Bill Distance (miles)'] > 0),
+        merged_df['TOTAL_CHARGE_CAD'] / merged_df['Bill Distance (miles)'],  # Revenue per mile calculation
+        np.nan  # Assign NaN if Bill Distance is missing or zero
     )
 
     # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
@@ -186,28 +196,28 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
         filtered_view['Highlight'] = filtered_view['Day_Group'].map(day_colors)
     
-        # Create the route summary DataFrame
+        # Add calculated fields
         filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
-        
-        # Add the 'Route' column
+    
+        # Create the 'Route' column and generate summary
         route_summary_df = filtered_view.assign(
             Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
         )[
             [
-                "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Straight Distance",
+                "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", "Straight Distance",
                 "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
         ]
-        
+    
         # Deduplicate rows based on 'Route', 'LS_ACTUAL_DATE', and 'LS_POWER_UNIT'
         route_summary_df = route_summary_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
-        
+    
         # Rename columns for final output
         route_summary_df = route_summary_df.rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
-            "LS_LEG_DIST": "Distance (miles)",
-            "Straight Distance": "Straight Distance (miles)",
+            "LS_LEG_DIST": "Leg Distance (miles)",
+            "Bill Distance (miles)": "Bill Distance (miles)",
             "TOTAL_PAY_SUM": "Driver Pay (CAD)"
         })
     
@@ -216,10 +226,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Route": "Grand Totals",
             "BILL_NUMBER": "",
             "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
-            "Distance (miles)": route_summary_df["Distance (miles)"].sum(),
-            "Straight Distance (miles)": route_summary_df["Straight Distance (miles)"].sum(),
-            "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Distance (miles)"].sum()
-            if route_summary_df["Distance (miles)"].sum() != 0 else 0,
+            "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
+            "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
+            "Straight Distance": route_summary_df["Straight Distance"].sum(),
+            "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
+            if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
             "LS_ACTUAL_DATE": "",
@@ -381,20 +392,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         
         st.plotly_chart(fig)
         
-        # Display locations missing coordinates relevant to the selection
-        relevant_missing_origins = filtered_view[
+        # Identify and display locations missing coordinates
+        missing_origins = filtered_view[
             pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON'])
         ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
         
-        relevant_missing_destinations = filtered_view[
+        missing_destinations = filtered_view[
             pd.isna(filtered_view['LEGD_LAT']) | pd.isna(filtered_view['LEGD_LON'])
         ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
         
-        relevant_missing_locations = pd.concat([relevant_missing_origins, relevant_missing_destinations]).drop_duplicates()
+        missing_locations = pd.concat([missing_origins, missing_destinations]).drop_duplicates()
         
-        if not relevant_missing_locations.empty:
+        if not missing_locations.empty:
             st.write("### Locations Missing Coordinates")
-            st.dataframe(relevant_missing_locations, use_container_width=True)
+            st.dataframe(missing_locations, use_container_width=True)
 
 else:
     st.warning("Please upload LEGSUM and TLORDER+DRIVERPAY CSV files to proceed.")
