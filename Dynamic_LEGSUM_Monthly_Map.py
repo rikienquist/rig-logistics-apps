@@ -185,7 +185,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         route_summary_df['TOTAL_PAY_SUM'] = route_summary_df['TOTAL_PAY_SUM'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
         route_summary_df['Profit'] = route_summary_df['Profit'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
         route_summary_df['Revenue per Mile'] = route_summary_df['Revenue per Mile'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "$0.00")
-        route_summary_df['LS_LEG_DIST'] = route_summary_df['LS_LEG_DIST'].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "0.0")
+        route_summary_df['LS_LEG_DIST'] = route_summary_df['LS_LEG_DIST'].apply(lambda x: f"{float(x):,.1f}" if pd.notna(x) else "0.0")
         route_summary_df['Straight Distance'] = route_summary_df['Straight Distance'].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "0.0")
         
         # Calculate totals
