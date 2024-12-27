@@ -380,9 +380,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             st.write("### Locations Missing Coordinates")
             st.dataframe(relevant_missing_locations, use_container_width=True)
 
-    else:
-        st.warning("No data available for the selected Power Unit and Driver ID.")
-
 else:
     st.warning("Please upload LEGSUM and TLORDER+DRIVERPAY CSV files to proceed.")
 
