@@ -198,21 +198,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     
         # Add calculated fields
         filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
-        
+    
         # Create the 'Route' column and generate summary
         route_summary_df = filtered_view.assign(
             Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
         )[
             [
                 "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", "Straight Distance",
-                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
+                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
         ]
-        
+    
         # Deduplicate rows based on 'Route', 'LS_ACTUAL_DATE', and 'LS_POWER_UNIT'
-        deduplication_criteria = filtered_view[['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE']]
-        route_summary_df = route_summary_df.loc[~deduplication_criteria.duplicated(), :]
-        
+        route_summary_df = route_summary_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+    
         # Rename columns for final output
         route_summary_df = route_summary_df.rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
@@ -221,7 +220,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Bill Distance (miles)": "Bill Distance (miles)",
             "TOTAL_PAY_SUM": "Driver Pay (CAD)"
         })
-        
+    
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
@@ -238,15 +237,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "LS_LEG_NOTE": "",
             "Highlight": None
         }])
-        
+    
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-        
+    
         # Format currency and numeric columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-        
+    
         # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
@@ -255,7 +254,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 return ['background-color: #c8e0f7'] * len(row)
             else:
                 return ['background-color: #f7f7c8'] * len(row)
-        
+    
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
