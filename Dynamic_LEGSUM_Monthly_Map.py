@@ -289,7 +289,7 @@ else:
 
     # Generate the map
     fig = go.Figure()
-
+    
     # Track sequence of city appearance for labeling
     location_sequence = {location: [] for location in set(filtered_view['LEGO_ZONE_DESC']).union(filtered_view['LEGD_ZONE_DESC'])}
     label_counter = 1
@@ -298,26 +298,26 @@ else:
         label_counter += 1
         location_sequence[row['LEGD_ZONE_DESC']].append(label_counter)
         label_counter += 1
-
+    
     # Initialize legend flags
     legend_added = {"Origin": False, "Destination": False, "Route": False}
-
+    
     # Loop through filtered data to create map elements
     for _, row in filtered_view.iterrows():
         origin_sequence = ", ".join(map(str, location_sequence[row['LEGO_ZONE_DESC']]))
         destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
-
+    
         # Get aggregated values for origin location
-        total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
+        total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
         hover_origin_text = (
             f"Location: {row['LEGO_ZONE_DESC']}<br>"
             f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-            f"Distance (miles): {distance:,.1f}<br>"
+            f"Bill Distance (miles): {bill_distance:,.1f}<br>"
             f"Revenue per Mile: ${rpm:,.2f}<br>"
             f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
             f"Profit (CAD): ${profit:,.2f}"
         )
-
+    
         # Add origin marker
         fig.add_trace(go.Scattergeo(
             lon=[row['LEGO_LON']],
@@ -332,18 +332,18 @@ else:
             showlegend=not legend_added["Origin"]
         ))
         legend_added["Origin"] = True
-
+    
         # Get aggregated values for destination location
-        total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
+        total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
         hover_dest_text = (
             f"Location: {row['LEGD_ZONE_DESC']}<br>"
             f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-            f"Distance (miles): {distance:,.1f}<br>"
+            f"Bill Distance (miles): {bill_distance:,.1f}<br>"
             f"Revenue per Mile: ${rpm:,.2f}<br>"
             f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
             f"Profit (CAD): ${profit:,.2f}"
         )
-
+    
         # Add destination marker
         fig.add_trace(go.Scattergeo(
             lon=[row['LEGD_LON']],
@@ -358,7 +358,7 @@ else:
             showlegend=not legend_added["Destination"]
         ))
         legend_added["Destination"] = True
-
+    
         # Add route line
         fig.add_trace(go.Scattergeo(
             lon=[row['LEGO_LON'], row['LEGD_LON']],
@@ -370,7 +370,7 @@ else:
             showlegend=not legend_added["Route"]
         ))
         legend_added["Route"] = True
-
+    
     # Configure map layout
     fig.update_layout(
         title=f"Routes from {start_date} to {end_date} - Power Unit: {selected_punit}, Driver ID: {selected_driver}",
@@ -385,21 +385,23 @@ else:
             countrycolor="rgb(217, 217, 217)"
         )
     )
-
+    
     st.plotly_chart(fig)
-
+    
     # Identify and display locations missing coordinates
     missing_origins = filtered_view[
         pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON'])
     ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
-
+    
     missing_destinations = filtered_view[
         pd.isna(filtered_view['LEGD_LAT']) | pd.isna(filtered_view['LEGD_LON'])
     ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
-
+    
     missing_locations = pd.concat([missing_origins, missing_destinations]).drop_duplicates()
-
+    
     if not missing_locations.empty:
         st.write("### Locations Missing Coordinates")
         st.dataframe(missing_locations, use_container_width=True)
 
+else:
+    st.warning("Please upload LEGSUMTLORDER+DRIVERPAY CSV files to proceed.")
