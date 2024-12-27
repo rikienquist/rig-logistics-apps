@@ -306,18 +306,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         for _, row in filtered_view.iterrows():
             origin_sequence = ", ".join(map(str, location_sequence[row['LEGO_ZONE_DESC']]))
             destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
-    
+        
             # Get aggregated values for origin location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
+            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
             hover_origin_text = (
                 f"Location: {row['LEGO_ZONE_DESC']}<br>"
                 f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
-                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Bill Distance (miles): {bill_distance:,.1f}<br>"  # Updated to Bill Distance
+                f"Revenue per Mile: ${rpm:,.2f}<br>"  # Updated to Revenue per Mile
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
             )
-    
+        
             # Add origin marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['LEGO_LON']],
@@ -332,18 +332,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 showlegend=not legend_added["Origin"]
             ))
             legend_added["Origin"] = True
-    
+        
             # Get aggregated values for destination location
-            total_charge, distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
+            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
             hover_dest_text = (
                 f"Location: {row['LEGD_ZONE_DESC']}<br>"
                 f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Distance (miles): {distance:,.1f}<br>"
-                f"Revenue per Mile: ${rpm:,.2f}<br>"
+                f"Bill Distance (miles): {bill_distance:,.1f}<br>"  # Updated to Bill Distance
+                f"Revenue per Mile: ${rpm:,.2f}<br>"  # Updated to Revenue per Mile
                 f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
                 f"Profit (CAD): ${profit:,.2f}"
             )
-    
+        
             # Add destination marker
             fig.add_trace(go.Scattergeo(
                 lon=[row['LEGD_LON']],
@@ -358,7 +358,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 showlegend=not legend_added["Destination"]
             ))
             legend_added["Destination"] = True
-    
+        
             # Add route line
             fig.add_trace(go.Scattergeo(
                 lon=[row['LEGO_LON'], row['LEGD_LON']],
