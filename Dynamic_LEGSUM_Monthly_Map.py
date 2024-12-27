@@ -205,10 +205,23 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             ]
         ]
     
-        # Deduplicate rows based on 'Route', 'LS_ACTUAL_DATE', and 'LS_POWER_UNIT'
-        route_summary_df = route_summary_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
-    
-        # Rename columns for final output
+        # Deduplicate rows in the filtered view based on LS_POWER_UNIT, Route, and LS_ACTUAL_DATE
+        filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_ACTUAL_DATE'])
+        
+        # Add calculated fields
+        filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
+        
+        # Create the 'Route' column
+        route_summary_df = filtered_view.assign(
+            Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
+        )[
+            [
+                "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", "Straight Distance",
+                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+            ]
+        ]
+        
+        # Rename columns for display
         route_summary_df = route_summary_df.rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
@@ -216,6 +229,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Bill Distance (miles)": "Bill Distance (miles)",
             "TOTAL_PAY_SUM": "Driver Pay (CAD)"
         })
+        
+        # Ensure Revenue per Mile and Bill Distance are correctly calculated
+        route_summary_df['Revenue per Mile'] = np.where(
+            pd.notna(route_summary_df["Bill Distance (miles)"]) & (route_summary_df["Bill Distance (miles)"] > 0),
+            route_summary_df["Total Charge (CAD)"] / route_summary_df["Bill Distance (miles)"],
+            np.nan
+        )
     
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
