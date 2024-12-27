@@ -96,17 +96,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
     # Add currency conversion for charges (if applicable)
-    exchange_rate = 1.38
-
+    exchange_rate = 1.38  # Example USD to CAD conversion rate
+    
     # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
     merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce')
     merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce')
-
-    # Calculate TOTAL_CHARGE_CAD only for rows where BILL_NUMBER exists
+    
+    # Calculate TOTAL_CHARGE_CAD based on CURRENCY_CODE
     merged_df['TOTAL_CHARGE_CAD'] = np.where(
-        pd.notna(merged_df['BILL_NUMBER']),  # Check if BILL_NUMBER exists
-        (merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)) * exchange_rate,  # Sum charges and convert
-        np.nan  # Set to NaN if BILL_NUMBER is missing
+        merged_df['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
+        (merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)) * exchange_rate,  # Convert to CAD
+        merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)  # Use original values if not USD
     )
 
     # Ensure LS_LEG_DIST is numeric and handle zeros explicitly
