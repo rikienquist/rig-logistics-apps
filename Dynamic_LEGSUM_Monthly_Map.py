@@ -55,20 +55,23 @@ def load_city_coordinates():
 @st.cache_data
 def preprocess_legsum(file, city_coords):
     legsum_df = pd.read_csv(file, low_memory=False)
-    legsum_df['LS_ACTUAL_DATE'] = pd.to_datetime(legsum_df['LS_ACTUAL_DATE'])
     
+    # Use `format='mixed'` to handle multiple date formats
+    legsum_df['LS_ACTUAL_DATE'] = pd.to_datetime(legsum_df['LS_ACTUAL_DATE'], errors='coerce', format='mixed')
+    
+    # Ensure city coordinates are standardized
     city_coords['LOCATION'] = city_coords['LOCATION'].str.strip().str.upper()
     legsum_df['LEGO_ZONE_DESC'] = legsum_df['LEGO_ZONE_DESC'].str.strip().str.upper()
     legsum_df['LEGD_ZONE_DESC'] = legsum_df['LEGD_ZONE_DESC'].str.strip().str.upper()
-    
+
     # Merge for LEGO_ZONE_DESC
     origin_coords = city_coords.rename(columns={"LOCATION": "LEGO_ZONE_DESC", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
     legsum_df = legsum_df.merge(origin_coords, on="LEGO_ZONE_DESC", how="left")
-    
+
     # Merge for LEGD_ZONE_DESC
     dest_coords = city_coords.rename(columns={"LOCATION": "LEGD_ZONE_DESC", "LAT": "DEST_LAT", "LON": "DEST_LON"})
     legsum_df = legsum_df.merge(dest_coords, on="LEGD_ZONE_DESC", how="left")
-    
+
     return legsum_df
 
 @st.cache_data
