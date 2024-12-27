@@ -281,15 +281,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     
         # Function to fetch aggregate values for a location
         def get_location_aggregates(location):
-        match = location_aggregates[location_aggregates['Location'] == location]
-        if not match.empty:
-            total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
-            bill_distance = match['Bill Distance (miles)'].iloc[0]  # Use Bill Distance
-            driver_pay = match['TOTAL_PAY_SUM'].iloc[0]
-            profit = match['Profit (CAD)'].iloc[0]
-            rpm = match['Revenue per Mile'].iloc[0]
-            return total_charge, bill_distance, driver_pay, profit, rpm
-        return 0, 0, 0, 0, 0
+            match = location_aggregates[location_aggregates['Location'] == location]
+            if not match.empty:
+                total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
+                bill_distance = match['Bill Distance (miles)'].iloc[0]  # Use Bill Distance
+                driver_pay = match['TOTAL_PAY_SUM'].iloc[0]
+                profit = match['Profit (CAD)'].iloc[0]
+                rpm = match['Revenue per Mile'].iloc[0]
+                return total_charge, bill_distance, driver_pay, profit, rpm
+            return 0, 0, 0, 0, 0
 
         # Generate the map
         fig = go.Figure()
