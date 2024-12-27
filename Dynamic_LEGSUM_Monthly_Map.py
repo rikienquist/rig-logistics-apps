@@ -55,19 +55,19 @@ def load_city_coordinates():
 def preprocess_legsum(file, city_coords):
     df = pd.read_csv(file, low_memory=False)
     
-    # Clean and standardize zone descriptions
-    def clean_zone(zone):
-        return re.sub(r"[^a-zA-Z\s]", "", str(zone)).strip().upper()
+    # Clean and standardize location names
+    def clean_location(location):
+        return re.sub(r"[^a-zA-Z\s]", "", str(location)).strip().upper()
     
-    city_coords['ZONE_DESC'] = city_coords['ZONE_DESC'].apply(clean_zone)
-    df['LEGO_ZONE_DESC'] = df['LEGO_ZONE_DESC'].apply(clean_zone)
-    df['LEGD_ZONE_DESC'] = df['LEGD_ZONE_DESC'].apply(clean_zone)
+    city_coords['LOCATION'] = city_coords['LOCATION'].apply(clean_location)
+    df['LEGO_ZONE_DESC'] = df['LEGO_ZONE_DESC'].apply(clean_location)
+    df['LEGD_ZONE_DESC'] = df['LEGD_ZONE_DESC'].apply(clean_location)
 
     # Merge with city coordinates for origins and destinations
-    origin_coords = city_coords.rename(columns={"ZONE_DESC": "LEGO_ZONE_DESC", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
+    origin_coords = city_coords.rename(columns={"LOCATION": "LEGO_ZONE_DESC", "LAT": "ORIG_LAT", "LON": "ORIG_LON"})
     df = df.merge(origin_coords, on="LEGO_ZONE_DESC", how="left")
     
-    dest_coords = city_coords.rename(columns={"ZONE_DESC": "LEGD_ZONE_DESC", "LAT": "DEST_LAT", "LON": "DEST_LON"})
+    dest_coords = city_coords.rename(columns={"LOCATION": "LEGD_ZONE_DESC", "LAT": "DEST_LAT", "LON": "DEST_LON"})
     df = df.merge(dest_coords, on="LEGD_ZONE_DESC", how="left")
     
     return df
