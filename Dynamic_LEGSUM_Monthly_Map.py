@@ -309,7 +309,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     
         # Generate the map
         fig = go.Figure()
-    
+        
         # Track sequence of city appearance for labeling
         location_sequence = {location: [] for location in set(filtered_view['LEGO_ZONE_DESC']).union(filtered_view['LEGD_ZONE_DESC'])}
         label_counter = 1
@@ -318,24 +318,23 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             label_counter += 1
             location_sequence[row['LEGD_ZONE_DESC']].append(label_counter)
             label_counter += 1
-    
+        
         # Initialize legend flags
         legend_added = {"Origin": False, "Destination": False, "Route": False}
-    
+        
         # Loop through filtered data to create map elements
         for _, row in filtered_view.iterrows():
             origin_sequence = ", ".join(map(str, location_sequence[row['LEGO_ZONE_DESC']]))
             destination_sequence = ", ".join(map(str, location_sequence[row['LEGD_ZONE_DESC']]))
         
-            # Get aggregated values for origin location
-            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
+            # Use Bill Distance (miles) and Revenue per Mile in hover text
             hover_origin_text = (
                 f"Location: {row['LEGO_ZONE_DESC']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Bill Distance (miles): {bill_distance:,.1f}<br>"  # Updated to Bill Distance
-                f"Revenue per Mile: ${rpm:,.2f}<br>"  # Updated to Revenue per Mile
-                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
+                f"Total Charge (CAD): ${row['Total Charge (CAD)']:,.2f}<br>"
+                f"Bill Distance (miles): {row['Bill Distance (miles)']:,.1f}<br>"
+                f"Revenue per Mile: ${row['Revenue per Mile']:,.2f}<br>"
+                f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:,.2f}<br>"
+                f"Profit (CAD): ${row['Profit (CAD)']:,.2f}"
             )
         
             # Add origin marker
@@ -353,15 +352,14 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             ))
             legend_added["Origin"] = True
         
-            # Get aggregated values for destination location
-            total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
+            # Destination hover text
             hover_dest_text = (
                 f"Location: {row['LEGD_ZONE_DESC']}<br>"
-                f"Total Charge (CAD): ${total_charge:,.2f}<br>"
-                f"Bill Distance (miles): {bill_distance:,.1f}<br>"  # Updated to Bill Distance
-                f"Revenue per Mile: ${rpm:,.2f}<br>"  # Updated to Revenue per Mile
-                f"Driver Pay (CAD): ${driver_pay:,.2f}<br>"
-                f"Profit (CAD): ${profit:,.2f}"
+                f"Total Charge (CAD): ${row['Total Charge (CAD)']:,.2f}<br>"
+                f"Bill Distance (miles): {row['Bill Distance (miles)']:,.1f}<br>"
+                f"Revenue per Mile: ${row['Revenue per Mile']:,.2f}<br>"
+                f"Driver Pay (CAD): ${row['Driver Pay (CAD)']:,.2f}<br>"
+                f"Profit (CAD): ${row['Profit (CAD)']:,.2f}"
             )
         
             # Add destination marker
@@ -390,7 +388,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 showlegend=not legend_added["Route"]
             ))
             legend_added["Route"] = True
-    
+        
         # Configure map layout
         fig.update_layout(
             title=f"Routes from {start_date} to {end_date} - Power Unit: {selected_punit}, Driver ID: {selected_driver}",
@@ -405,7 +403,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 countrycolor="rgb(217, 217, 217)"
             )
         )
-    
+        
         st.plotly_chart(fig)
     
         # Identify and display locations missing coordinates
