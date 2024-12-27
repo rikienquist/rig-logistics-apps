@@ -94,6 +94,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
 
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+    
+    # Deduplicate rows based on 'Route' and 'LS_ACTUAL_DATE' within each 'LS_POWER_UNIT'
+    merged_df = merged_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
