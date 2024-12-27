@@ -260,9 +260,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         location_aggregates['Revenue per Mile'] = location_aggregates['TOTAL_CHARGE_CAD'] / location_aggregates['LS_LEG_DIST']
         location_aggregates['Profit (CAD)'] = location_aggregates['TOTAL_CHARGE_CAD'] - location_aggregates['TOTAL_PAY_SUM']
     
-        # Display location aggregates
-        st.write("Location Aggregates:")
-        st.dataframe(location_aggregates, use_container_width=True)
+        # Function to fetch aggregate values for a location
+        def get_location_aggregates(location):
+            match = location_aggregates[location_aggregates['Location'] == location]
+            if not match.empty:
+                total_charge = match['TOTAL_CHARGE_CAD'].iloc[0]
+                distance = match['LS_LEG_DIST'].iloc[0]
+                driver_pay = match['TOTAL_PAY_SUM'].iloc[0]
+                profit = match['Profit (CAD)'].iloc[0]
+                rpm = match['Revenue per Mile'].iloc[0]
+                return total_charge, distance, driver_pay, profit, rpm
+            return 0, 0, 0, 0, 0
 
         # Generate the map
         fig = go.Figure()
