@@ -188,14 +188,22 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     
         # Create the route summary DataFrame
         filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
+        
+        # Add the 'Route' column
         route_summary_df = filtered_view.assign(
             Route=lambda x: x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC']
         )[
             [
                 "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Straight Distance",
-                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
+                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
-        ].rename(columns={
+        ]
+        
+        # Deduplicate rows based on 'Route', 'LS_ACTUAL_DATE', and 'LS_POWER_UNIT'
+        route_summary_df = route_summary_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+        
+        # Rename columns for final output
+        route_summary_df = route_summary_df.rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
             "LS_LEG_DIST": "Distance (miles)",
@@ -220,9 +228,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         }])
     
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-
-        # Deduplicate rows based on 'Route' and 'LS_ACTUAL_DATE' within each 'LS_POWER_UNIT'
-        merged_df = merged_df.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
     
         # Format currency and numeric columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
