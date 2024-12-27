@@ -156,12 +156,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     filtered_view = merged_df[merged_df['LS_POWER_UNIT'] == selected_punit].copy()
     
     # Driver selection (optional)
-    relevant_drivers = filtered_view['DRIVER_ID'].dropna().unique()
+    relevant_drivers = filtered_view['LS_DRIVER'].dropna().unique()
     driver_options = ["All"] + sorted(relevant_drivers.astype(str))
     selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
     
     if selected_driver != "All":
-        filtered_view = filtered_view[filtered_view['DRIVER_ID'] == selected_driver].copy()
+        filtered_view = filtered_view[filtered_view['LS_DRIVER'] == selected_driver].copy()
     
     # Date Range Filtering
     st.write("### Select Date Range:")
@@ -193,7 +193,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         )[
             [
                 "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Straight Distance",
-                "Revenue per Mile", "DRIVER_ID", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
+                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight"
             ]
         ].rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
