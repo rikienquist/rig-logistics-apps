@@ -98,6 +98,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce')
     merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce')
 
+    # Set 'CALLNAME' (Customer) to None if there is no BILL_NUMBER
+    merged_df['CALLNAME'] = np.where(
+        merged_df['BILL_NUMBER'].notna(),  # Only retain Customer if BILL_NUMBER exists
+        merged_df['CALLNAME'],
+        None  # Set to None otherwise
+    )
+
     # Calculate TOTAL_CHARGE_CAD based on CURRENCY_CODE
     merged_df['TOTAL_CHARGE_CAD'] = np.where(
         merged_df['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
