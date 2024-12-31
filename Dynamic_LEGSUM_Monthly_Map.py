@@ -222,7 +222,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             # Create the route summary DataFrame
             route_summary_df = filtered_view[
                 [
-                    "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", "Straight Distance",
+                    "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
                     "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
                 ]
             ].rename(columns={
@@ -262,7 +262,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
             "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
             "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
-            "Straight Distance": route_summary_df["Straight Distance"].sum(),
             "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
             if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
