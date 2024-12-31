@@ -223,7 +223,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             route_summary_df = filtered_view[
                 [
                     "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
-                    "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                    "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE"
                 ]
             ].rename(columns={
                 "LS_FREIGHT": "BILL_NUMBER",
@@ -268,7 +268,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
             "LS_ACTUAL_DATE": "",
             "LS_LEG_NOTE": "",
-            "Highlight": None
         }])
     
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
