@@ -15,9 +15,9 @@ st.title("Trip Map Viewer")
 st.markdown("""
 ### Instructions:
 Use the following query to generate the required LEGSUM data:  
-SELECT LS_POWER_UNIT, LS_DRIVER, LS_FREIGHT, LS_TRIP_NUMBER, LEGO_ZONE_DESC, LEGD_ZONE_DESC, 
+SELECT LS_POWER_UNIT, LS_DRIVER, LS_FREIGHT, LS_TRIP_NUMBER, LS_LEG_SEQ, LEGO_ZONE_DESC, LEGD_ZONE_DESC, 
        LS_LEG_DIST, LS_MT_LOADED, LS_ACTUAL_DATE, LS_LEG_NOTE  
-FROM LEGSUM WHERE "LS_ACTUAL_DATE" BETWEEN 'X' AND 'Y;
+FROM LEGSUM WHERE "LS_ACTUAL_DATE" BETWEEN 'X' AND 'Y';
 
 Use the following query to generate the required pre-merged TLORDER + DRIVERPAY data:  
 SELECT 
@@ -189,12 +189,49 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
         filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
     
-        # Assign colors for alternating rows by day
-        filtered_view = filtered_view.sort_values(by='LS_ACTUAL_DATE')
-        filtered_view['Day_Group'] = filtered_view['LS_ACTUAL_DATE'].dt.date
-        unique_days = list(filtered_view['Day_Group'].unique())
-        day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
-        filtered_view['Highlight'] = filtered_view['Day_Group'].map(day_colors)
+        # Filter by selected date range
+        filtered_view = filtered_view[
+            (filtered_view['LS_ACTUAL_DATE'].dt.date >= start_date) &
+            (filtered_view['LS_ACTUAL_DATE'].dt.date <= end_date)
+        ].copy()
+        
+        if filtered_view.empty:
+            st.warning("No data available for the selected criteria.")
+        else:
+            # Deduplicate rows based on 'LS_POWER_UNIT', 'Route', and 'LS_ACTUAL_DATE'
+            filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
+            filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+            
+            # Sort by LS_ACTUAL_DATE (primary) and LS_LEG_SEQ (secondary)
+            filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+            
+            # Assign colors for alternating rows by day
+            filtered_view['Day_Group'] = filtered_view['LS_ACTUAL_DATE'].dt.date
+            unique_days = list(filtered_view['Day_Group'].unique())
+            day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
+            filtered_view['Highlight'] = filtered_view['Day_Group'].map(day_colors)
+            
+            # Add calculated fields
+            filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
+            filtered_view['Revenue per Mile'] = np.where(
+                pd.notna(filtered_view['Bill Distance (miles)']) & (filtered_view['Bill Distance (miles)'] > 0),
+                filtered_view['TOTAL_CHARGE_CAD'] / filtered_view['Bill Distance (miles)'],
+                np.nan
+            )
+        
+            # Create the route summary DataFrame
+            route_summary_df = filtered_view[
+                [
+                    "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", "Straight Distance",
+                    "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                ]
+            ].rename(columns={
+                "LS_FREIGHT": "BILL_NUMBER",
+                "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
+                "LS_LEG_DIST": "Leg Distance (miles)",
+                "Bill Distance (miles)": "Bill Distance (miles)",
+                "TOTAL_PAY_SUM": "Driver Pay (CAD)"
+            })
     
         # Add calculated fields
         filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
