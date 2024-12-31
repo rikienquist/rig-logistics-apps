@@ -330,10 +330,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Generate the map
         fig = go.Figure()
         
-        # Track sequential numbering for locations
-        location_sequence = {}
-        label_counter = 1
-        
         # Identify missing locations to skip in numbering
         missing_locations = pd.concat([
             filtered_view[pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON'])][['LEGO_ZONE_DESC']].rename(
@@ -342,14 +338,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 columns={'LEGD_ZONE_DESC': 'Location'})
         ]).drop_duplicates()['Location'].tolist()
         
-        # Add all unique origins in order with their sequence number
+        # Assign sequential numbers to locations
+        location_sequence = {}
+        label_counter = 1
+        
+        # Assign numbers to all origins in order
         for _, row in filtered_view.iterrows():
             origin = row['LEGO_ZONE_DESC']
             if origin not in missing_locations and origin not in location_sequence:
                 location_sequence[origin] = label_counter
                 label_counter += 1
         
-        # Add the final destination
+        # Assign number to the final destination
         last_destination = filtered_view.iloc[-1]['LEGD_ZONE_DESC']
         if last_destination not in missing_locations and last_destination not in location_sequence:
             location_sequence[last_destination] = label_counter
