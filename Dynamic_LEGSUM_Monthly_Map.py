@@ -330,39 +330,44 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Generate the map
         fig = go.Figure()
         
-        # Identify missing locations to skip in numbering
-        missing_locations = pd.concat([
-            filtered_view[pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON'])][['LEGO_ZONE_DESC']].rename(
-                columns={'LEGO_ZONE_DESC': 'Location'}),
-            filtered_view[pd.isna(filtered_view['LEGD_LAT']) | pd.isna(filtered_view['LEGD_LON'])][['LEGD_ZONE_DESC']].rename(
-                columns={'LEGD_ZONE_DESC': 'Location'})
-        ]).drop_duplicates()['Location'].tolist()
+        # Identify missing locations
+        missing_origins = filtered_view[
+            pd.isna(filtered_view['LEGO_LAT']) | pd.isna(filtered_view['LEGO_LON'])
+        ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
         
-        # Assign sequential numbers to locations
+        missing_destinations = filtered_view[
+            pd.isna(filtered_view['LEGD_LAT']) | pd.isna(filtered_view['LEGD_LON'])
+        ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
+        
+        missing_locations = pd.concat([missing_origins, missing_destinations]).drop_duplicates()
+        missing_location_set = set(missing_locations['Location'])
+        
+        # Track sequence of city appearance for labeling
         location_sequence = {}
         label_counter = 1
         
-        # Assign numbers to all origins in order
+        # Number all origins in order
         for _, row in filtered_view.iterrows():
-            origin = row['LEGO_ZONE_DESC']
-            if origin not in missing_locations and origin not in location_sequence:
-                location_sequence[origin] = label_counter
+            if row['LEGO_ZONE_DESC'] not in missing_location_set:
+                if row['LEGO_ZONE_DESC'] not in location_sequence:
+                    location_sequence[row['LEGO_ZONE_DESC']] = []
+                location_sequence[row['LEGO_ZONE_DESC']].append(label_counter)
                 label_counter += 1
         
-        # Assign number to the final destination
-        last_destination = filtered_view.iloc[-1]['LEGD_ZONE_DESC']
-        if last_destination not in missing_locations and last_destination not in location_sequence:
-            location_sequence[last_destination] = label_counter
-            label_counter += 1
+        # Add the final destination
+        final_destination = filtered_view.iloc[-1]['LEGD_ZONE_DESC']
+        if final_destination not in missing_location_set:
+            if final_destination not in location_sequence:
+                location_sequence[final_destination] = []
+            location_sequence[final_destination].append(label_counter)
         
         # Initialize legend flags
         legend_added = {"Origin": False, "Destination": False, "Route": False}
         
         # Loop through filtered data to create map elements
         for _, row in filtered_view.iterrows():
-            # Get numbering for the current origin and destination
-            origin_label = location_sequence.get(row['LEGO_ZONE_DESC'], "")
-            destination_label = location_sequence.get(row['LEGD_ZONE_DESC'], "")
+            origin_sequence = ", ".join(map(str, location_sequence.get(row['LEGO_ZONE_DESC'], [])))
+            destination_sequence = ", ".join(map(str, location_sequence.get(row['LEGD_ZONE_DESC'], [])))
         
             # Get aggregated values for origin location
             total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
@@ -376,19 +381,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             )
         
             # Add origin marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['LEGO_LON']],
-                lat=[row['LEGO_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="blue"),
-                text=str(origin_label),
-                textposition="top right",
-                name="Origin" if not legend_added["Origin"] else None,
-                hoverinfo="text",
-                hovertext=hover_origin_text,
-                showlegend=not legend_added["Origin"]
-            ))
-            legend_added["Origin"] = True
+            if row['LEGO_ZONE_DESC'] not in missing_location_set:
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['LEGO_LON']],
+                    lat=[row['LEGO_LAT']],
+                    mode="markers+text",
+                    marker=dict(size=8, color="blue"),
+                    text=origin_sequence,
+                    textposition="top right",
+                    name="Origin" if not legend_added["Origin"] else None,
+                    hoverinfo="text",
+                    hovertext=hover_origin_text,
+                    showlegend=not legend_added["Origin"]
+                ))
+                legend_added["Origin"] = True
         
             # Get aggregated values for destination location
             total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGD_ZONE_DESC'])
@@ -402,19 +408,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             )
         
             # Add destination marker
-            fig.add_trace(go.Scattergeo(
-                lon=[row['LEGD_LON']],
-                lat=[row['LEGD_LAT']],
-                mode="markers+text",
-                marker=dict(size=8, color="red"),
-                text=str(destination_label),
-                textposition="top right",
-                name="Destination" if not legend_added["Destination"] else None,
-                hoverinfo="text",
-                hovertext=hover_dest_text,
-                showlegend=not legend_added["Destination"]
-            ))
-            legend_added["Destination"] = True
+            if row['LEGD_ZONE_DESC'] not in missing_location_set:
+                fig.add_trace(go.Scattergeo(
+                    lon=[row['LEGD_LON']],
+                    lat=[row['LEGD_LAT']],
+                    mode="markers+text",
+                    marker=dict(size=8, color="red"),
+                    text=destination_sequence,
+                    textposition="top right",
+                    name="Destination" if not legend_added["Destination"] else None,
+                    hoverinfo="text",
+                    hovertext=hover_dest_text,
+                    showlegend=not legend_added["Destination"]
+                ))
+                legend_added["Destination"] = True
         
             # Add route line
             fig.add_trace(go.Scattergeo(
@@ -445,10 +452,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         
         st.plotly_chart(fig)
         
-        # Display missing locations at the bottom
-        if missing_locations:
+        # Display locations missing coordinates
+        if not missing_locations.empty:
             st.write("### Locations Missing Coordinates")
-            st.dataframe(pd.DataFrame({'Location': missing_locations}), use_container_width=True)
+            st.dataframe(missing_locations, use_container_width=True)
 
 else:
     st.warning("Please upload LEGSUM and TLORDER+DRIVERPAY CSV files to proceed.")
