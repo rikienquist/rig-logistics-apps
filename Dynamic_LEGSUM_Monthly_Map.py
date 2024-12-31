@@ -222,11 +222,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             # Create the route summary DataFrame
             route_summary_df = filtered_view[
                 [
-                    "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
+                    "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
                     "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
                 ]
             ].rename(columns={
                 "LS_FREIGHT": "BILL_NUMBER",
+                "CALLNAME": "Customer",
                 "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
                 "LS_LEG_DIST": "Leg Distance (miles)",
                 "Bill Distance (miles)": "Bill Distance (miles)",
@@ -244,11 +245,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Create the route summary DataFrame
         route_summary_df = filtered_view[
             [
-                "Route", "LS_FREIGHT", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", 
+                "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", 
                 "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
         ].rename(columns={
             "LS_FREIGHT": "BILL_NUMBER",
+            "CALLNAME": "Customer",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
             "LS_LEG_DIST": "Leg Distance (miles)",
             "Bill Distance (miles)": "Bill Distance (miles)",
@@ -259,6 +261,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
             "BILL_NUMBER": "",
+            "Customer": "",
             "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
             "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
             "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
@@ -270,9 +273,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "LS_LEG_NOTE": "",
             "Highlight": None
         }])
-    
+        
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
-    
+        
         # Format currency and numeric columns
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
             route_summary_df[col] = route_summary_df[col].apply(
