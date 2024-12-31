@@ -350,8 +350,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         missing_location_set = set(missing_locations['Location'])
         
         # Track sequence of city appearance for labeling
-        location_sequence = {}
+        location_sequence = {location: [] for location in set(filtered_view['LEGO_ZONE_DESC']).union(filtered_view['LEGD_ZONE_DESC'])}
         label_counter = 1
+        for _, row in filtered_view.iterrows():
+            location_sequence[row['LEGO_ZONE_DESC']].append(label_counter)
+            label_counter += 1
+            location_sequence[row['LEGD_ZONE_DESC']].append(label_counter)
+            label_counter += 1
         
         # Number all origins in order
         for _, row in filtered_view.iterrows():
