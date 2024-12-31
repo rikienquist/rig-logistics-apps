@@ -330,29 +330,30 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Generate the map
         fig = go.Figure()
         
-        # Track the sequence of locations for numbering
-        label_counter = 1
+        # Sort the filtered data by LS_ACTUAL_DATE and LS_LEG_SEQ for proper sequencing
+        filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+        
+        # Initialize sequence counter
         location_sequence = {}
+        sequence_number = 1
         
-        # Sequentially number locations based on their order in filtered_view
+        # Assign sequential numbers for origins
         for _, row in filtered_view.iterrows():
-            # Add LEGO_ZONE_DESC (origin) if not already in sequence or not the last location added
-            if row['LEGO_ZONE_DESC'] not in location_sequence or label_counter - 1 not in location_sequence.values():
-                location_sequence[row['LEGO_ZONE_DESC']] = label_counter
-                label_counter += 1
+            origin = row['LEGO_ZONE_DESC']
+            if origin not in location_sequence:
+                location_sequence[origin] = sequence_number
+                sequence_number += 1
         
-            # Add LEGD_ZONE_DESC (destination) if not already in sequence or not the last location added
-            if row['LEGD_ZONE_DESC'] not in location_sequence or label_counter - 1 not in location_sequence.values():
-                location_sequence[row['LEGD_ZONE_DESC']] = label_counter
-                label_counter += 1
-        
-        # Initialize legend flags
-        legend_added = {"Origin": False, "Destination": False, "Route": False}
+        # Assign the final sequence number to the last destination
+        final_destination = filtered_view.iloc[-1]['LEGD_ZONE_DESC']
+        if final_destination not in location_sequence:
+            location_sequence[final_destination] = sequence_number
         
         # Loop through filtered data to create map elements
+        legend_added = {"Origin": False, "Destination": False, "Route": False}
         for _, row in filtered_view.iterrows():
-            origin_number = location_sequence[row['LEGO_ZONE_DESC']]
-            destination_number = location_sequence[row['LEGD_ZONE_DESC']]
+            origin_sequence = location_sequence[row['LEGO_ZONE_DESC']]
+            destination_sequence = location_sequence[row['LEGD_ZONE_DESC']]
         
             # Get aggregated values for origin location
             total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
@@ -371,7 +372,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 lat=[row['LEGO_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="blue"),
-                text=origin_number,
+                text=str(origin_sequence),
                 textposition="top right",
                 name="Origin" if not legend_added["Origin"] else None,
                 hoverinfo="text",
@@ -397,7 +398,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 lat=[row['LEGD_LAT']],
                 mode="markers+text",
                 marker=dict(size=8, color="red"),
-                text=destination_number,
+                text=str(destination_sequence),
                 textposition="top right",
                 name="Destination" if not legend_added["Destination"] else None,
                 hoverinfo="text",
