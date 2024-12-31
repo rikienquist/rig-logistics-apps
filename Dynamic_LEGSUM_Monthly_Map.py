@@ -342,25 +342,30 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 columns={'LEGD_ZONE_DESC': 'Location'})
         ]).drop_duplicates()['Location'].tolist()
         
-        # Number all origins and add the last destination
+        # Number all origins in the order they appear
         for _, row in filtered_view.iterrows():
             origin = row['LEGO_ZONE_DESC']
-            if origin not in missing_locations and origin not in location_sequence:
-                location_sequence[origin] = label_counter
+            if origin not in missing_locations:
+                # Number each occurrence of the origin
+                location_sequence[(origin, label_counter)] = label_counter
                 label_counter += 1
         
-        # Add the final destination (if it's not missing and not already numbered)
+        # Add the final destination
         last_destination = filtered_view.iloc[-1]['LEGD_ZONE_DESC']
-        if last_destination not in missing_locations and last_destination not in location_sequence:
-            location_sequence[last_destination] = label_counter
+        if last_destination not in missing_locations:
+            location_sequence[(last_destination, label_counter)] = label_counter
+        
+        # Adjust location_sequence to assign numbers to unique locations while maintaining order
+        numbered_locations = {loc: idx for (loc, idx) in sorted(location_sequence.items(), key=lambda x: x[1])}
         
         # Initialize legend flags
         legend_added = {"Origin": False, "Destination": False, "Route": False}
         
         # Loop through filtered data to create map elements
         for _, row in filtered_view.iterrows():
-            origin_label = location_sequence.get(row['LEGO_ZONE_DESC'], "")
-            destination_label = location_sequence.get(row['LEGD_ZONE_DESC'], "")
+            # Get numbering for the current origin and destination
+            origin_label = numbered_locations.get((row['LEGO_ZONE_DESC'], location_sequence.get((row['LEGO_ZONE_DESC'], None))), "")
+            destination_label = numbered_locations.get((row['LEGD_ZONE_DESC'], location_sequence.get((row['LEGD_ZONE_DESC'], None))), "")
         
             # Get aggregated values for origin location
             total_charge, bill_distance, driver_pay, profit, rpm = get_location_aggregates(row['LEGO_ZONE_DESC'])
