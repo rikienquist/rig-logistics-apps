@@ -42,6 +42,11 @@ def load_city_coordinates():
         "latitude": "LAT",
         "longitude": "LON"
     }, inplace=True)
+
+    # Ensure LAT and LON columns are numeric, coercing errors to NaN
+    city_coords['LAT'] = pd.to_numeric(city_coords['LAT'], errors='coerce')
+    city_coords['LON'] = pd.to_numeric(city_coords['LON'], errors='coerce')
+    
     return city_coords
 
 @st.cache_data
