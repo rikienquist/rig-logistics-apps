@@ -117,48 +117,39 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
     # Filter data for selected customer
-    customer_data = merged_df[merged_df['CALLNAME'] == selected_callname]
+    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
 
     # Dropdowns for Origin and Destination Provinces
-    origprov_options = ["All"] + sorted(customer_data['ORIGPROV'].dropna().unique())
-    destprov_options = ["All"] + sorted(customer_data['DESTPROV'].dropna().unique())
+    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
+    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
 
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
     # Add Start Date and End Date filtering
     st.write("### Select Date Range:")
-    if not customer_data.empty:
-        min_date = customer_data['LS_ACTUAL_DATE'].min().date()
-        max_date = customer_data['LS_ACTUAL_DATE'].max().date()
+    if not filtered_data.empty:
+        min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
+        max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
         start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
         end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
 
-        # Filter by date range
-        customer_data = customer_data[
-            (customer_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
-            (customer_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+        # Apply date range filter
+        filtered_data = filtered_data[
+            (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+            (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
         ]
 
-    # Filter based on ORIGPROV and DESTPROV
-    if selected_origprov != "All" and selected_destprov != "All":
-        # Match both ORIGPROV and DESTPROV together
-        filtered_bills = customer_data[
-            (customer_data['ORIGPROV'] == selected_origprov) &
-            (customer_data['DESTPROV'] == selected_destprov)
+    # Handle combined ORIGPROV and DESTPROV filtering
+    if selected_origprov != "All" or selected_destprov != "All":
+        # Identify BILL_NUMBERs satisfying the selected ORIGPROV or DESTPROV
+        valid_bills = filtered_data[
+            ((filtered_data['ORIGPROV'] == selected_origprov) | (selected_origprov == "All")) &
+            ((filtered_data['DESTPROV'] == selected_destprov) | (selected_destprov == "All"))
         ]['BILL_NUMBER'].unique()
-    elif selected_origprov != "All":
-        # Match only ORIGPROV
-        filtered_bills = customer_data[customer_data['ORIGPROV'] == selected_origprov]['BILL_NUMBER'].unique()
-    elif selected_destprov != "All":
-        # Match only DESTPROV
-        filtered_bills = customer_data[customer_data['DESTPROV'] == selected_destprov]['BILL_NUMBER'].unique()
-    else:
-        # No province filter, include all
-        filtered_bills = customer_data['BILL_NUMBER'].unique()
 
-    # Include all legs for the matching BILL_NUMBERs
-    filtered_data = customer_data[customer_data['BILL_NUMBER'].isin(filtered_bills)]
+        # Filter the original dataset to include all legs for these BILL_NUMBERs
+        filtered_data = filtered_data[filtered_data['BILL_NUMBER'].isin(valid_bills)]
 
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
@@ -166,7 +157,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Group data by BILL_NUMBER and display separate tables for each
         grouped = filtered_data.groupby('BILL_NUMBER')
         for bill_number, group in grouped:
-            st.write(f"### Bill Number: {bill_number}")
+            # Get the overall ORIGPROV -> DESTPROV for the BILL_NUMBER
+            bill_origprov = group['ORIGPROV'].iloc[0]
+            bill_destprov = group['DESTPROV'].iloc[0]
+
+            # Display the BILL_NUMBER and its ORIGPROV -> DESTPROV
+            st.write(f"### Bill Number: {bill_number} ({bill_origprov} to {bill_destprov})")
 
             # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
             group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
