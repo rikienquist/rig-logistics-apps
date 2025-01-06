@@ -117,20 +117,27 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
     # Filter data for selected customer
-    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
+    customer_data = merged_df[merged_df['CALLNAME'] == selected_callname]
 
     # Dropdowns for Origin and Destination Provinces
-    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
-    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
+    origprov_options = ["All"] + sorted(customer_data['ORIGPROV'].dropna().unique())
+    destprov_options = ["All"] + sorted(customer_data['DESTPROV'].dropna().unique())
 
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
-    # Apply province filters
+    # Apply province filters to determine which BILL_NUMBERs to include
+    filtered_bills = customer_data.copy()
     if selected_origprov != "All":
-        filtered_data = filtered_data[filtered_data['ORIGPROV'] == selected_origprov]
+        filtered_bills = filtered_bills[filtered_bills['ORIGPROV'] == selected_origprov]
     if selected_destprov != "All":
-        filtered_data = filtered_data[filtered_data['DESTPROV'] == selected_destprov]
+        filtered_bills = filtered_bills[filtered_bills['DESTPROV'] == selected_destprov]
+
+    # Get the list of BILL_NUMBERs that match the province filters
+    matching_bills = filtered_bills['BILL_NUMBER'].unique()
+
+    # Filter the original customer data to include all legs of matching BILL_NUMBERs
+    filtered_data = customer_data[customer_data['BILL_NUMBER'].isin(matching_bills)]
 
     # Add Start Date and End Date filtering
     st.write("### Select Date Range:")
