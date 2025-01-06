@@ -97,7 +97,6 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-# Power Unit Finder Section
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     # Load and preprocess data
     city_coordinates_df = load_city_coordinates()
@@ -111,69 +110,68 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['ORIGPROV'] = merged_df['LEGO_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from origin
     merged_df['DESTPROV'] = merged_df['LEGD_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from destination
 
-    # Ensure LS_ACTUAL_DATE is a proper datetime type
-    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
-
     st.header("Power Unit Finder")
 
-    # Dropdown for CALLNAME
+    # Dropdown for Customer (CALLNAME) - no "All" option
     callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
     selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
-    # Filter by selected customer
-    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname].copy()
+    # Filter data for selected customer
+    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
 
-    # Date Range Filtering
-    st.write("### Select Date Range:")
-    min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
-    max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
-    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
-
-    # Apply date filter to the customer-filtered data
-    filtered_data = filtered_data[
-        (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
-        (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
-    ]
-
-    # ORIGPROV and DESTPROV dropdowns (include all available options)
-    origprov_options = sorted(merged_df['ORIGPROV'].dropna().unique())  # Use all ORIGPROV options
-    destprov_options = sorted(merged_df['DESTPROV'].dropna().unique())  # Use all DESTPROV options
+    # Dropdowns for Origin and Destination Provinces
+    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
+    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
 
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
-    # Apply filters for ORIGPROV and DESTPROV
-    filtered_data = filtered_data[
-        (filtered_data['ORIGPROV'] == selected_origprov) &
-        (filtered_data['DESTPROV'] == selected_destprov)
-    ]
+    # Apply province filters
+    if selected_origprov != "All":
+        filtered_data = filtered_data[filtered_data['ORIGPROV'] == selected_origprov]
+    if selected_destprov != "All":
+        filtered_data = filtered_data[filtered_data['DESTPROV'] == selected_destprov]
 
-    # Check if any data remains after filtering
+    # Add Start Date and End Date filtering
+    st.write("### Select Date Range:")
+    if not filtered_data.empty:
+        min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
+        max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+        start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
+        end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+
+        # Apply date range filter
+        filtered_data = filtered_data[
+            (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+            (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+        ]
+
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
     else:
-        # Display separate tables for each BILL_NUMBER
-        st.write("### Matching Power Units by BILL_NUMBER:")
-        for bill_number in filtered_data['BILL_NUMBER'].unique():
-            bill_data = filtered_data[filtered_data['BILL_NUMBER'] == bill_number].copy()
+        # Group data by BILL_NUMBER and display separate tables for each
+        grouped = filtered_data.groupby('BILL_NUMBER')
+        for bill_number, group in grouped:
+            st.write(f"### Bill Number: {bill_number}")
 
-            # Order by LS_ACTUAL_DATE and LS_LEG_SEQ
-            bill_data = bill_data.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+            # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
+            group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
 
-            # Prepare the table
-            display_table = bill_data[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']]
-            display_table = display_table.rename(columns={
-                'LS_POWER_UNIT': 'Power Unit',
-                'LEGO_ZONE_DESC': 'Origin',
-                'LEGD_ZONE_DESC': 'Destination',
-                'LS_LEG_SEQ': 'Sequence',
-                'LS_ACTUAL_DATE': 'Date'
-            })
+            # Create a table showing movements for the bill number
+            bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
+                columns={
+                    'LS_POWER_UNIT': 'Power Unit',
+                    'LEGO_ZONE_DESC': 'Origin',
+                    'LEGD_ZONE_DESC': 'Destination',
+                    'LS_LEG_SEQ': 'Sequence',
+                    'LS_ACTUAL_DATE': 'Date'
+                }
+            )
+            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
 
-            # Display the table with a header for the BILL_NUMBER
-            st.write(f"**BILL_NUMBER: {bill_number}**")
-            st.dataframe(display_table, use_container_width=True)
+            # Display the table for this bill number
+            st.write(bill_table)
+
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     city_coordinates_df = load_city_coordinates()
