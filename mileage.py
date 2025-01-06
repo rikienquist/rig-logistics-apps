@@ -186,7 +186,7 @@ else:
     st.warning("No data available for the selected filters.")
 
 # Add an option to download filtered data as CSV
-@st.cache
+@st.cache_data
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8')
 
