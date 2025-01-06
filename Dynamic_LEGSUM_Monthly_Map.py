@@ -1,4 +1,4 @@
-### all works
+### adding "Find Power Unit" section, postal/zip codes in table
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -97,6 +97,7 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
+# Power Unit Finder Section
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     # Load and preprocess data
     city_coordinates_df = load_city_coordinates()
@@ -110,50 +111,77 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['ORIGPROV'] = merged_df['LEGO_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from origin
     merged_df['DESTPROV'] = merged_df['LEGD_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from destination
 
+    # Ensure LS_ACTUAL_DATE is a proper datetime type
+    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
+
     st.header("Power Unit Finder")
 
-    # Dropdowns for filtering
-    callname_options = ["All"] + sorted(merged_df['CALLNAME'].dropna().unique())
+    # Dropdown for CALLNAME
+    callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
     selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
     # Filter by selected customer
-    filtered_data = merged_df.copy()
-    if selected_callname != "All":
-        filtered_data = filtered_data[filtered_data['CALLNAME'] == selected_callname]
+    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname].copy()
 
-    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
-    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
+    # Date Range Filtering
+    st.write("### Select Date Range:")
+    min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
+    max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
+    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+
+    # Apply date filter
+    filtered_data = filtered_data[
+        (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+        (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+    ]
+
+    # Filter ORIGPROV and DESTPROV dynamically based on customer
+    origprov_options = sorted(filtered_data['ORIGPROV'].dropna().unique())
+    destprov_options = sorted(filtered_data['DESTPROV'].dropna().unique())
 
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
     # Apply additional filters
-    if selected_origprov != "All":
-        filtered_data = filtered_data[filtered_data['ORIGPROV'] == selected_origprov]
-    if selected_destprov != "All":
-        filtered_data = filtered_data[filtered_data['DESTPROV'] == selected_destprov]
+    filtered_data = filtered_data[
+        (filtered_data['ORIGPROV'] == selected_origprov) &
+        (filtered_data['DESTPROV'] == selected_destprov)
+    ]
 
     # Check if any data remains after filtering
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
     else:
-        # Display results grouped by BILL_NUMBER and Power Unit
-        st.write("### Matching Power Units:")
-        grouped_data = filtered_data.groupby(['BILL_NUMBER', 'LS_POWER_UNIT']).apply(
-            lambda x: pd.DataFrame({
-                "Route": x['LEGO_ZONE_DESC'] + " to " + x['LEGD_ZONE_DESC'],
-                "Sequence": x['LS_LEG_SEQ'],
-                "Date": x['LS_ACTUAL_DATE'].dt.date
+        # Display separate tables for each BILL_NUMBER
+        st.write("### Matching Power Units by BILL_NUMBER:")
+        for bill_number in filtered_data['BILL_NUMBER'].unique():
+            bill_data = filtered_data[filtered_data['BILL_NUMBER'] == bill_number].copy()
+
+            # Order by LS_ACTUAL_DATE and LS_LEG_SEQ
+            bill_data = bill_data.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+
+            # Prepare the table
+            display_table = bill_data[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']]
+            display_table = display_table.rename(columns={
+                'LS_POWER_UNIT': 'Power Unit',
+                'LEGO_ZONE_DESC': 'Origin',
+                'LEGD_ZONE_DESC': 'Destination',
+                'LS_LEG_SEQ': 'Sequence',
+                'LS_ACTUAL_DATE': 'Date'
             })
-        ).reset_index(level=[0, 1]).reset_index(drop=True)
 
-        # Rename columns for clarity
-        grouped_data.rename(columns={
-            'BILL_NUMBER': 'Bill Number',
-            'LS_POWER_UNIT': 'Power Unit'
-        }, inplace=True)
+            # Display the table with a header for the BILL_NUMBER
+            st.write(f"**BILL_NUMBER: {bill_number}**")
+            st.dataframe(display_table, use_container_width=True)
 
-        st.write(grouped_data)
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
+    city_coordinates_df = load_city_coordinates()
+    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
+    tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
+
+    # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
+    merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
