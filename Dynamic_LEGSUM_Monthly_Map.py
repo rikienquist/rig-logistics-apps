@@ -152,42 +152,35 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         # Step 1: Identify unique trips for the customer, origin, and destination provinces
         unique_trips = filtered_data[['LS_TRIP_NUMBER', 'LS_FREIGHT']].drop_duplicates()
 
-        # Step 2: Identify the last occurrence of "P" (power unit) for each trip
-        last_resource_p = (
-            filtered_data[filtered_data['LS_LEG_NOTE'].str.contains("P", na=False)]  # Filter for resource type P
-            .groupby('LS_TRIP_NUMBER')['LS_LEG_SEQ']
-            .max()
-            .reset_index()
-            .rename(columns={'LS_LEG_SEQ': 'LAST_P_LEG_SEQ'})
-        )
+        # Step 2: Find all power unit legs for these trips
+        power_unit_data = filtered_data[filtered_data['LS_LEG_NOTE'].str.contains("P", na=False)]
 
-        # Step 3: Join back to filtered data to get the associated power units and legs
-        power_unit_data = filtered_data.merge(last_resource_p, on='LS_TRIP_NUMBER', how='inner')
-        power_unit_data = power_unit_data[power_unit_data['LS_LEG_SEQ'] == power_unit_data['LAST_P_LEG_SEQ']]
+        if power_unit_data.empty:
+            st.warning("No power unit data found for the selected criteria.")
+        else:
+            # Group by BILL_NUMBER and display separate tables
+            grouped = power_unit_data.groupby('BILL_NUMBER')
+            for bill_number, group in grouped:
+                st.write(f"### Bill Number: {bill_number}")
 
-        # Step 4: Display tables for each BILL_NUMBER
-        grouped = power_unit_data.groupby('BILL_NUMBER')
-        for bill_number, group in grouped:
-            st.write(f"### Bill Number: {bill_number}")
+                # Get all legs of the trip
+                trip_data = filtered_data[filtered_data['LS_TRIP_NUMBER'] == group['LS_TRIP_NUMBER'].iloc[0]]
+                trip_data = trip_data.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
 
-            # Get all legs of the trip
-            trip_data = filtered_data[filtered_data['LS_TRIP_NUMBER'] == group['LS_TRIP_NUMBER'].iloc[0]]
-            trip_data = trip_data.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+                # Create a table showing movements for the bill number
+                bill_table = trip_data[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
+                    columns={
+                        'LS_POWER_UNIT': 'Power Unit',
+                        'LEGO_ZONE_DESC': 'Origin',
+                        'LEGD_ZONE_DESC': 'Destination',
+                        'LS_LEG_SEQ': 'Sequence',
+                        'LS_ACTUAL_DATE': 'Date'
+                    }
+                )
+                bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
 
-            # Create a table showing movements for the bill number
-            bill_table = trip_data[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
-                columns={
-                    'LS_POWER_UNIT': 'Power Unit',
-                    'LEGO_ZONE_DESC': 'Origin',
-                    'LEGD_ZONE_DESC': 'Destination',
-                    'LS_LEG_SEQ': 'Sequence',
-                    'LS_ACTUAL_DATE': 'Date'
-                }
-            )
-            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
-
-            # Display the table for this bill number
-            st.write(bill_table)
+                # Display the table for this bill number
+                st.write(bill_table)
 
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
