@@ -106,9 +106,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
-    # Add a province column for origin and destination zones
-    merged_df['ORIGPROV'] = merged_df['LEGO_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from origin
-    merged_df['DESTPROV'] = merged_df['LEGD_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from destination
+    # Add a province column for origin zones from LEGSUM and destination provinces from TLORDER
+    merged_df['ORIGPROV'] = merged_df['LEGO_ZONE_DESC'].str.split(", ").str[-1]  # Extract province from origin in LEGSUM
+    merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use the DESTPROV directly from TLORDER data
 
     st.header("Power Unit Finder")
 
@@ -181,7 +181,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
 
             # Display the table for this bill number
             st.write(bill_table)
-
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     city_coordinates_df = load_city_coordinates()
