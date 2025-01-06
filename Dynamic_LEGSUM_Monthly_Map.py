@@ -15,8 +15,8 @@ st.title("Trip Map Viewer")
 st.markdown("""
 ### Instructions:
 Use the following query to generate the required LEGSUM data:  
-SELECT LS_POWER_UNIT, LS_DRIVER, LS_FREIGHT, LS_TRIP_NUMBER, LS_LEG_SEQ, LEGO_ZONE_DESC, LEGD_ZONE_DESC, 
-       LS_LEG_DIST, LS_MT_LOADED, LS_ACTUAL_DATE, LS_LEG_NOTE  
+SELECT LS_POWER_UNIT, LS_DRIVER, LS_FREIGHT, LS_TRIP_NUMBER, LS_LEG_SEQ, LS_FROM_ZONE, LS_TO_ZONE, 
+       LEGO_ZONE_DESC, LEGD_ZONE_DESC, LS_LEG_DIST, LS_MT_LOADED, LS_ACTUAL_DATE, LS_LEG_NOTE  
 FROM LEGSUM WHERE "LS_ACTUAL_DATE" BETWEEN 'X' AND 'Y';
 
 Use the following query to generate the required pre-merged TLORDER + DRIVERPAY data:  
@@ -350,14 +350,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             filtered_view['TOTAL_CHARGE_CAD'] / filtered_view['Bill Distance (miles)'],
             np.nan
         )
-    
+        
         # Create the route summary DataFrame
         route_summary_df = filtered_view[
             [
-                "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)", 
-                "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                "Route", "LS_FROM_ZONE", "LS_TO_ZONE", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", 
+                "Bill Distance (miles)", "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", 
+                "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
         ].rename(columns={
+            "LS_FROM_ZONE": "From Zone",
+            "LS_TO_ZONE": "To Zone",
             "LS_FREIGHT": "BILL_NUMBER",
             "CALLNAME": "Customer",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
@@ -365,10 +368,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Bill Distance (miles)": "Bill Distance (miles)",
             "TOTAL_PAY_SUM": "Driver Pay (CAD)"
         })
-    
+        
         # Calculate grand totals
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
+            "From Zone": "",
+            "To Zone": "",
             "BILL_NUMBER": "",
             "Customer": "",
             "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
@@ -380,7 +385,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
             "LS_ACTUAL_DATE": "",
             "LS_LEG_NOTE": "",
-            "Highlight": None
+            "Highlight": None,
+            "LS_POWER_UNIT": ""
         }])
         
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
@@ -390,7 +396,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-    
+        
         # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
@@ -399,11 +405,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 return ['background-color: #c8e0f7'] * len(row)
             else:
                 return ['background-color: #f7f7c8'] * len(row)
-    
+        
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
-    
+        
         # Combine origins and destinations for aggregated totals
         location_aggregates = pd.concat([
             filtered_view[['LEGO_ZONE_DESC', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']].rename(
@@ -413,17 +419,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
                 columns={'LEGD_ZONE_DESC': 'Location'}
             )
         ], ignore_index=True)
-    
+        
         # Aggregate data by location
         location_aggregates = location_aggregates.groupby(['Location'], as_index=False).agg({
             'TOTAL_CHARGE_CAD': 'sum',
             'Bill Distance (miles)': 'sum',
             'TOTAL_PAY_SUM': 'sum'
         })
-    
+        
         location_aggregates['Revenue per Mile'] = location_aggregates['TOTAL_CHARGE_CAD'] / location_aggregates['Bill Distance (miles)']
         location_aggregates['Profit (CAD)'] = location_aggregates['TOTAL_CHARGE_CAD'] - location_aggregates['TOTAL_PAY_SUM']
-    
+        
         # Function to fetch aggregate values for a location
         def get_location_aggregates(location):
             match = location_aggregates[location_aggregates['Location'] == location]
