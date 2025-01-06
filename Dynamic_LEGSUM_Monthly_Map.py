@@ -116,7 +116,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
     selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
-    # Filter data for the selected customer
+    # Filter data for selected customer
     filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
 
     # Dropdowns for Origin and Destination Provinces
@@ -149,38 +149,28 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
     else:
-        # Step 1: Identify unique trips for the customer, origin, and destination provinces
-        unique_trips = filtered_data[['LS_TRIP_NUMBER', 'LS_FREIGHT']].drop_duplicates()
+        # Group data by BILL_NUMBER and display separate tables for each
+        grouped = filtered_data.groupby('BILL_NUMBER')
+        for bill_number, group in grouped:
+            st.write(f"### Bill Number: {bill_number}")
 
-        # Step 2: Find all power unit legs for these trips
-        power_unit_data = filtered_data[filtered_data['LS_LEG_NOTE'].str.contains("P", na=False)]
+            # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
+            group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
 
-        if power_unit_data.empty:
-            st.warning("No power unit data found for the selected criteria.")
-        else:
-            # Group by BILL_NUMBER and display separate tables
-            grouped = power_unit_data.groupby('BILL_NUMBER')
-            for bill_number, group in grouped:
-                st.write(f"### Bill Number: {bill_number}")
+            # Create a table showing movements for the bill number
+            bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
+                columns={
+                    'LS_POWER_UNIT': 'Power Unit',
+                    'LEGO_ZONE_DESC': 'Origin',
+                    'LEGD_ZONE_DESC': 'Destination',
+                    'LS_LEG_SEQ': 'Sequence',
+                    'LS_ACTUAL_DATE': 'Date'
+                }
+            )
+            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
 
-                # Get all legs of the trip
-                trip_data = filtered_data[filtered_data['LS_TRIP_NUMBER'] == group['LS_TRIP_NUMBER'].iloc[0]]
-                trip_data = trip_data.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
-
-                # Create a table showing movements for the bill number
-                bill_table = trip_data[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
-                    columns={
-                        'LS_POWER_UNIT': 'Power Unit',
-                        'LEGO_ZONE_DESC': 'Origin',
-                        'LEGD_ZONE_DESC': 'Destination',
-                        'LS_LEG_SEQ': 'Sequence',
-                        'LS_ACTUAL_DATE': 'Date'
-                    }
-                )
-                bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
-
-                # Display the table for this bill number
-                st.write(bill_table)
+            # Display the table for this bill number
+            st.write(bill_table)
 
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
