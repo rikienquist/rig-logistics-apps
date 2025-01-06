@@ -149,40 +149,28 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
     else:
-        # Group data by BILL_NUMBER and retrieve associated legs for each trip
+        # Group data by BILL_NUMBER and display separate tables for each
         grouped = filtered_data.groupby('BILL_NUMBER')
         for bill_number, group in grouped:
             st.write(f"### Bill Number: {bill_number}")
 
-            # Simulating SQL Query to Retrieve All Legs for the BILL_NUMBER
-            # Assuming you have a function `get_trip_legs` that retrieves legs data
-            trip_number = group['LS_TRIP_NUMBER'].iloc[0]  # Get associated trip number for the bill
-            legs_data = get_trip_legs(trip_number)  # Fetch legs using the function
-
-            # Merge legs data with existing group to enhance details
-            legs_data = pd.merge(legs_data, city_coordinates_df, left_on='LS_FROM_ZONE', right_on='LOCATION', how='left').rename(columns={
-                "LAT": "From Lat", "LON": "From Lon"
-            })
-            legs_data = pd.merge(legs_data, city_coordinates_df, left_on='LS_TO_ZONE', right_on='LOCATION', how='left').rename(columns={
-                "LAT": "To Lat", "LON": "To Lon"
-            })
-
-            # Sort by LS_LEG_SEQ to ensure legs are in the correct order
-            legs_data = legs_data.sort_values(by=['LS_LEG_SEQ'])
+            # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
+            group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
 
             # Create a table showing movements for the bill number
-            legs_table = legs_data[['ILD_RES_ID', 'LS_FROM_ZONE', 'LS_TO_ZONE', 'LS_LEG_SEQ', 'ILD_RES_TYPE']].rename(
+            bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
                 columns={
-                    'ILD_RES_ID': 'Power Unit',
-                    'LS_FROM_ZONE': 'Origin',
-                    'LS_TO_ZONE': 'Destination',
+                    'LS_POWER_UNIT': 'Power Unit',
+                    'LEGO_ZONE_DESC': 'Origin',
+                    'LEGD_ZONE_DESC': 'Destination',
                     'LS_LEG_SEQ': 'Sequence',
-                    'ILD_RES_TYPE': 'Resource Type'
+                    'LS_ACTUAL_DATE': 'Date'
                 }
             )
+            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
 
             # Display the table for this bill number
-            st.write(legs_table)
+            st.write(bill_table)
 
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
