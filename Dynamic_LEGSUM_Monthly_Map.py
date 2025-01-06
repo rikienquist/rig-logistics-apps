@@ -130,20 +130,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
     end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
 
-    # Apply date filter
+    # Apply date filter to the customer-filtered data
     filtered_data = filtered_data[
         (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
         (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
     ]
 
-    # Filter ORIGPROV and DESTPROV dynamically based on customer
-    origprov_options = sorted(filtered_data['ORIGPROV'].dropna().unique())
-    destprov_options = sorted(filtered_data['DESTPROV'].dropna().unique())
+    # ORIGPROV and DESTPROV dropdowns (include all available options)
+    origprov_options = sorted(merged_df['ORIGPROV'].dropna().unique())  # Use all ORIGPROV options
+    destprov_options = sorted(merged_df['DESTPROV'].dropna().unique())  # Use all DESTPROV options
 
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
-    # Apply additional filters
+    # Apply filters for ORIGPROV and DESTPROV
     filtered_data = filtered_data[
         (filtered_data['ORIGPROV'] == selected_origprov) &
         (filtered_data['DESTPROV'] == selected_destprov)
@@ -182,6 +182,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
 
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+
+    st.header("Table and Map for Power Unit")
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
