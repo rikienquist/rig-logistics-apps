@@ -126,32 +126,39 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
-    # Apply province filters to determine which BILL_NUMBERs to include
-    filtered_bills = customer_data.copy()
-    if selected_origprov != "All":
-        filtered_bills = filtered_bills[filtered_bills['ORIGPROV'] == selected_origprov]
-    if selected_destprov != "All":
-        filtered_bills = filtered_bills[filtered_bills['DESTPROV'] == selected_destprov]
-
-    # Get the list of BILL_NUMBERs that match the province filters
-    matching_bills = filtered_bills['BILL_NUMBER'].unique()
-
-    # Filter the original customer data to include all legs of matching BILL_NUMBERs
-    filtered_data = customer_data[customer_data['BILL_NUMBER'].isin(matching_bills)]
-
     # Add Start Date and End Date filtering
     st.write("### Select Date Range:")
-    if not filtered_data.empty:
-        min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
-        max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+    if not customer_data.empty:
+        min_date = customer_data['LS_ACTUAL_DATE'].min().date()
+        max_date = customer_data['LS_ACTUAL_DATE'].max().date()
         start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
         end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
 
-        # Apply date range filter
-        filtered_data = filtered_data[
-            (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
-            (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+        # Filter by date range
+        customer_data = customer_data[
+            (customer_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+            (customer_data['LS_ACTUAL_DATE'].dt.date <= end_date)
         ]
+
+    # Filter based on ORIGPROV and DESTPROV
+    if selected_origprov != "All" and selected_destprov != "All":
+        # Match both ORIGPROV and DESTPROV together
+        filtered_bills = customer_data[
+            (customer_data['ORIGPROV'] == selected_origprov) &
+            (customer_data['DESTPROV'] == selected_destprov)
+        ]['BILL_NUMBER'].unique()
+    elif selected_origprov != "All":
+        # Match only ORIGPROV
+        filtered_bills = customer_data[customer_data['ORIGPROV'] == selected_origprov]['BILL_NUMBER'].unique()
+    elif selected_destprov != "All":
+        # Match only DESTPROV
+        filtered_bills = customer_data[customer_data['DESTPROV'] == selected_destprov]['BILL_NUMBER'].unique()
+    else:
+        # No province filter, include all
+        filtered_bills = customer_data['BILL_NUMBER'].unique()
+
+    # Include all legs for the matching BILL_NUMBERs
+    filtered_data = customer_data[customer_data['BILL_NUMBER'].isin(filtered_bills)]
 
     if filtered_data.empty:
         st.warning("No results found for the selected criteria.")
