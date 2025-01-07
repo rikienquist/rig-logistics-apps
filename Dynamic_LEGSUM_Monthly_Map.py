@@ -249,6 +249,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         np.nan  # Assign NaN if Bill Distance is missing or zero
     )
 
+    # Ensure Driver Pay (CAD) is only assigned when there is a BILL_NUMBER
+    merged_df['Driver Pay (CAD)'] = np.where(
+        pd.notna(merged_df['LS_FREIGHT']),  # Check if BILL_NUMBER exists
+        merged_df['TOTAL_PAY_SUM'].fillna(0),  # Use TOTAL_PAY_SUM if BILL_NUMBER exists
+        0  # Otherwise, set Driver Pay to 0
+    )
+
     # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
     merged_df['Profit (CAD)'] = np.where(
         pd.notna(merged_df['TOTAL_CHARGE_CAD']),
@@ -346,19 +353,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             route_summary_df = filtered_view[
                 [
                     "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
-                    "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                    "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
                 ]
             ].rename(columns={
                 "LS_FREIGHT": "BILL_NUMBER",
                 "CALLNAME": "Customer",
                 "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
                 "LS_LEG_DIST": "Leg Distance (miles)",
-                "Bill Distance (miles)": "Bill Distance (miles)",
-                "TOTAL_PAY_SUM": "Driver Pay (CAD)"
+                "Bill Distance (miles)": "Bill Distance (miles)"
             })
     
         # Add calculated fields
-        filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
+        filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['Driver Pay (CAD)']
         filtered_view['Revenue per Mile'] = np.where(
             pd.notna(filtered_view['Bill Distance (miles)']) & (filtered_view['Bill Distance (miles)'] > 0),
             filtered_view['TOTAL_CHARGE_CAD'] / filtered_view['Bill Distance (miles)'],
@@ -369,7 +375,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
         route_summary_df = filtered_view[
             [
                 "Route", "LS_FROM_ZONE", "LS_TO_ZONE", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", 
-                "Bill Distance (miles)", "Revenue per Mile", "LS_DRIVER", "TOTAL_PAY_SUM", "Profit (CAD)", 
+                "Bill Distance (miles)", "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", 
                 "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
             ]
         ].rename(columns={
@@ -379,8 +385,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "CALLNAME": "Customer",
             "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
             "LS_LEG_DIST": "Leg Distance (miles)",
-            "Bill Distance (miles)": "Bill Distance (miles)",
-            "TOTAL_PAY_SUM": "Driver Pay (CAD)"
+            "Bill Distance (miles)": "Bill Distance (miles)"
         })
         
         # Calculate grand totals
