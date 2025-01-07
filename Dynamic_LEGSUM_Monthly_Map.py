@@ -126,14 +126,28 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
     selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
 
-    # Add Start Date and End Date filtering
+    # Add Start Date and End Date filtering with unique keys
     st.write("### Select Date Range:")
     if not filtered_data.empty:
         min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
         max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
-        start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-        end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
-
+    
+        # Use unique keys for each date_input
+        start_date = st.date_input(
+            "Start Date", 
+            value=min_date, 
+            min_value=min_date, 
+            max_value=max_date, 
+            key=f"start_date_{selected_callname}"
+        )
+        end_date = st.date_input(
+            "End Date", 
+            value=max_date, 
+            min_value=min_date, 
+            max_value=max_date, 
+            key=f"end_date_{selected_callname}"
+        )
+    
         # Apply date range filter
         filtered_data = filtered_data[
             (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
