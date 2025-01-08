@@ -244,15 +244,41 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             st.write(bill_table)
 
 
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_fuel_file:
+    # Preprocess and merge data
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
+    isaac_fuel_df = preprocess_isaac_fuel(uploaded_isaac_fuel_file)
 
-    # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
-    merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
+    # Merge LEGSUM with TLORDER + DRIVERPAY
+    merged_df = legsum_df.merge(
+        tlorder_driverpay_df,
+        left_on='LS_FREIGHT',
+        right_on='BILL_NUMBER',
+        how='left'
+    )
 
-    st.header("Table and Map for Power Unit")
+    # Merge with ISAAC Fuel Report
+    merged_df = merged_df.merge(
+        isaac_fuel_df,
+        left_on='LS_POWER_UNIT',
+        right_on='VEHICLE_NO',
+        how='left'
+    )
+    merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
+
+    # Extract the month and year from the dataset
+    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
+    if not merged_df['LS_ACTUAL_DATE'].isna().all():
+        # Get the month and year from the data
+        month_name = merged_df['LS_ACTUAL_DATE'].dt.month_name().iloc[0]
+        year = merged_df['LS_ACTUAL_DATE'].dt.year.iloc[0]
+        month_year_title = f"{month_name} {year}"
+    else:
+        month_year_title = "Unknown Month"
+
+    st.header(f"Table and Map for Power Unit - {month_year_title}")
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
