@@ -157,6 +157,16 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['ORIGPROV'] = merged_df['ORIGPROV']  # Use ORIGPROV from TLORDER
     merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use DESTPROV from TLORDER
 
+    # Extract the month and year from the dataset
+    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
+    if not merged_df['LS_ACTUAL_DATE'].isna().all():
+        # Get the month and year from the data
+        month_name = merged_df['LS_ACTUAL_DATE'].dt.month_name().iloc[0]
+        year = merged_df['LS_ACTUAL_DATE'].dt.year.iloc[0]
+        month_year_title = f"{month_name} {year}"
+    else:
+        month_year_title = "Unknown Month"
+
     st.header("Power Unit Finder")
 
     # Dropdown for Customer (CALLNAME) - no "All" option
