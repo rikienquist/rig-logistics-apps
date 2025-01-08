@@ -466,7 +466,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         
         # Calculate fuel cost for the selected power unit
-        grand_fuel_cost = filtered_view['FUEL_QUANTITY_L'].sum() * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in filtered_view else 0
+        grand_fuel_cost = filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in filtered_view else 0
         
         # Calculate grand totals, including lease cost and fuel cost
         grand_totals = pd.DataFrame([{
