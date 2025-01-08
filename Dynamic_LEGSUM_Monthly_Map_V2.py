@@ -157,16 +157,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['ORIGPROV'] = merged_df['ORIGPROV']  # Use ORIGPROV from TLORDER
     merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use DESTPROV from TLORDER
 
-    # Extract the month and year from the dataset
-    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
-    if not merged_df['LS_ACTUAL_DATE'].isna().all():
-        # Get the month and year from the data
-        month_name = merged_df['LS_ACTUAL_DATE'].dt.month_name().iloc[0]
-        year = merged_df['LS_ACTUAL_DATE'].dt.year.iloc[0]
-        month_year_title = f"{month_name} {year}"
-    else:
-        month_year_title = "Unknown Month"
-
     st.header("Power Unit Finder")
 
     # Dropdown for Customer (CALLNAME) - no "All" option
@@ -254,34 +244,14 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             st.write(bill_table)
 
 
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_fuel_file:
-    # Preprocess and merge data
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
-    isaac_fuel_df = preprocess_isaac_fuel(uploaded_isaac_fuel_file)
 
-    # Merge LEGSUM with TLORDER + DRIVERPAY
-    merged_df = legsum_df.merge(
-        tlorder_driverpay_df,
-        left_on='LS_FREIGHT',
-        right_on='BILL_NUMBER',
-        how='left'
-    )
+    # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
+    merged_df = legsum_df.merge(tlorder_driverpay_df, left_on='LS_FREIGHT', right_on='BILL_NUMBER', how='left')
 
-    # Merge with ISAAC Fuel Report
-    merged_df = merged_df.merge(
-        isaac_fuel_df,
-        left_on='LS_POWER_UNIT',
-        right_on='VEHICLE_NO',
-        how='left'
-    )
-    merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
-
-    # Extract the month and year from the dataset (if needed elsewhere)
-    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
-
-    # Title without month and year
     st.header("Table and Map for Power Unit")
 
     # Add currency conversion for charges (if applicable)
@@ -376,21 +346,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
     if selected_driver != "All":
         filtered_view = filtered_view[filtered_view['LS_DRIVER'] == selected_driver].copy()
     
-    # Display the month and year extracted from the dataset
-    st.write(f"### Data for the Month: {month_year_title}")
+    # Date Range Filtering
+    st.write("### Select Date Range:")
+    min_date = filtered_view['LS_ACTUAL_DATE'].min().date()
+    max_date = filtered_view['LS_ACTUAL_DATE'].max().date()
+    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
+    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
     
-    # No need for additional filtering, as the dataset corresponds to the uploaded month's data
-    filtered_view = merged_df[merged_df['LS_POWER_UNIT'] == selected_punit].copy()
-    
-    if filtered_view.empty:
-        st.warning("No data available for the selected Power Unit.")
-    else:
-        # Deduplicate rows based on 'LS_POWER_UNIT', 'Route', and 'LS_ACTUAL_DATE'
-        filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
-        filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
-    
-        # Sort by LS_ACTUAL_DATE (primary) and LS_LEG_SEQ (secondary)
-        filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+    # Filter by selected date range
+    filtered_view = filtered_view[
+        (filtered_view['LS_ACTUAL_DATE'].dt.date >= start_date) &
+        (filtered_view['LS_ACTUAL_DATE'].dt.date <= end_date)
+    ].copy()
     
     if filtered_view.empty:
         st.warning("No data available for the selected criteria.")
@@ -673,4 +640,3 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
 
 else:
     st.warning("Please upload LEGSUM and TLORDER+DRIVERPAY CSV files to proceed.")
-    
