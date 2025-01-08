@@ -515,6 +515,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
         
+        # Format distance columns to 1 decimal place
+        for col in ["Leg Distance (miles)", "Bill Distance (miles)"]:
+            route_summary_df[col] = route_summary_df[col].apply(
+                lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+            )
+        
         # Define row styling
         def highlight_rows(row):
             if row['Route'] == "Grand Totals":
