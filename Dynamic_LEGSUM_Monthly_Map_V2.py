@@ -268,17 +268,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
     )
     merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
 
-    # Extract the month and year from the dataset
+    # Extract the month and year from the dataset (if needed elsewhere)
     merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
-    if not merged_df['LS_ACTUAL_DATE'].isna().all():
-        # Get the month and year from the data
-        month_name = merged_df['LS_ACTUAL_DATE'].dt.month_name().iloc[0]
-        year = merged_df['LS_ACTUAL_DATE'].dt.year.iloc[0]
-        month_year_title = f"{month_name} {year}"
-    else:
-        month_year_title = "Unknown Month"
 
-    st.header(f"Table and Map for Power Unit - {month_year_title}")
+    # Title without month and year
+    st.header("Table and Map for Power Unit")
 
     # Add currency conversion for charges (if applicable)
     exchange_rate = 1.38  # Example USD to CAD conversion rate
@@ -387,10 +381,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
     
         # Sort by LS_ACTUAL_DATE (primary) and LS_LEG_SEQ (secondary)
         filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
-    
-        # Display the filtered table
-        st.write(f"### Trip Data for Power Unit: {selected_punit}")
-        st.dataframe(filtered_view, use_container_width=True)
     
     if filtered_view.empty:
         st.warning("No data available for the selected criteria.")
