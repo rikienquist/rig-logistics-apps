@@ -34,7 +34,8 @@ WHERE
 GROUP BY 
     D.BILL_NUMBER, O.CALLNAME, O.CHARGES, O.XCHARGES, O.DISTANCE, O.DISTANCE_UNITS, O.CURRENCY_CODE;
 
-Replace X and Y with the desired date range in form YYYY-MM-DD.  
+Replace X and Y with the desired date range in form YYYY-MM-DD. 
+(Recommendation: add about 2 weeks for 'Y' to account for delayed driver payments)
 
 Save the query results as CSV files and upload them below to visualize the data.
 """)
@@ -435,7 +436,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Bill Distance (miles)": "Bill Distance (miles)"
         })
         
-        # Calculate grand totals
+        # Add fixed lease cost and calculate fuel cost
+        lease_cost = 3100  # Fixed lease cost in CAD
+        fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
+        
+        # Calculate grand totals for fuel cost and include lease cost
+        grand_fuel_cost = merged_df['FUEL_QUANTITY_L'].sum() * fuel_cost_multiplier
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
             "From Zone": "",
@@ -448,17 +454,27 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
             if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
-            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - route_summary_df["Driver Pay (CAD)"].sum(),
+            "Lease Cost": lease_cost,
+            "Fuel Cost": grand_fuel_cost,
+            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() - 
+                            route_summary_df["Driver Pay (CAD)"].sum() - 
+                            lease_cost - 
+                            grand_fuel_cost,
             "LS_ACTUAL_DATE": "",
             "LS_LEG_NOTE": "",
             "Highlight": None,
             "LS_POWER_UNIT": ""
         }])
         
+        # Add columns for Lease Cost and Fuel Cost to the route_summary_df
+        route_summary_df["Lease Cost"] = np.nan
+        route_summary_df["Fuel Cost"] = np.nan
+        
+        # Append the Grand Total row
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
         
         # Format currency and numeric columns
-        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)"]:
+        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)", "Lease Cost", "Fuel Cost"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
@@ -472,6 +488,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             else:
                 return ['background-color: #f7f7c8'] * len(row)
         
+        # Apply styling and display the table
         styled_route_summary = route_summary_df.style.apply(highlight_rows, axis=1)
         st.write("Route Summary:")
         st.dataframe(styled_route_summary, use_container_width=True)
