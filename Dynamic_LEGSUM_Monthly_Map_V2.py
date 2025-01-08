@@ -34,7 +34,9 @@ WHERE
 GROUP BY 
     D.BILL_NUMBER, O.CALLNAME, O.CHARGES, O.XCHARGES, O.DISTANCE, O.DISTANCE_UNITS, O.CURRENCY_CODE;
 
-Replace X and Y with the desired date range in form YYYY-MM-DD.  
+Replace X and Y with the desired date range in form YYYY-MM-DD.
+
+Recommendation: add 2 weeks to Y for TLORDER + DRIVERPAY data to account for delayed driver pay.
 
 Save the query results as CSV files and upload them below to visualize the data.
 """)
