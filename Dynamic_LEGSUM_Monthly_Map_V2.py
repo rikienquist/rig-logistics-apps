@@ -157,7 +157,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     # Add a province column for both origin and destination from TLORDER data
     merged_df['ORIGPROV'] = merged_df['ORIGPROV']  # Use ORIGPROV from TLORDER
     merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use DESTPROV from TLORDER
-
+    st.write("Merged Data:", merged_df.head())
     st.header("Power Unit Finder")
 
     # Dropdown for Customer (CALLNAME) - no "All" option
