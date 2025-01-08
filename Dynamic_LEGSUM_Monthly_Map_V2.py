@@ -372,18 +372,25 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
     if selected_driver != "All":
         filtered_view = filtered_view[filtered_view['LS_DRIVER'] == selected_driver].copy()
     
-    # Date Range Filtering
-    st.write("### Select Date Range:")
-    min_date = filtered_view['LS_ACTUAL_DATE'].min().date()
-    max_date = filtered_view['LS_ACTUAL_DATE'].max().date()
-    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+    # Display the month and year extracted from the dataset
+    st.write(f"### Data for the Month: {month_year_title}")
     
-    # Filter by selected date range
-    filtered_view = filtered_view[
-        (filtered_view['LS_ACTUAL_DATE'].dt.date >= start_date) &
-        (filtered_view['LS_ACTUAL_DATE'].dt.date <= end_date)
-    ].copy()
+    # No need for additional filtering, as the dataset corresponds to the uploaded month's data
+    filtered_view = merged_df[merged_df['LS_POWER_UNIT'] == selected_punit].copy()
+    
+    if filtered_view.empty:
+        st.warning("No data available for the selected Power Unit.")
+    else:
+        # Deduplicate rows based on 'LS_POWER_UNIT', 'Route', and 'LS_ACTUAL_DATE'
+        filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
+        filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+    
+        # Sort by LS_ACTUAL_DATE (primary) and LS_LEG_SEQ (secondary)
+        filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+    
+        # Display the filtered table
+        st.write(f"### Trip Data for Power Unit: {selected_punit}")
+        st.dataframe(filtered_view, use_container_width=True)
     
     if filtered_view.empty:
         st.warning("No data available for the selected criteria.")
