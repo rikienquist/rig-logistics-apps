@@ -814,7 +814,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Revenue_per_Mile": power_unit_totals["Total_Charge_CAD"].sum() / power_unit_totals["Bill_Distance_Miles"].sum()
             if power_unit_totals["Bill_Distance_Miles"].sum() != 0 else 0,
             "Driver_Pay_CAD": power_unit_totals["Driver_Pay_CAD"].sum(),
-            "Lease Cost": power_unit_totals["Lease Cost"].sum(),  # Sum of lease costs
+            "Lease Cost": power_unit_totals["Lease Cost"].sum(),
             "Fuel_Cost": power_unit_totals["Fuel_Cost"].sum(),
             "Profit_CAD": power_unit_totals["Profit_CAD"].sum()
         }
@@ -822,11 +822,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Format numeric columns for display
         formatted_totals = power_unit_totals.copy()
-        for col in ['Total_Charge_CAD', 'Bill_Distance_Miles', 'Revenue_per_Mile',
-                    'Driver_Pay_CAD', 'Lease Cost', 'Fuel_Cost', 'Profit_CAD']:
+        for col in ['Total_Charge_CAD', 'Revenue_per_Mile', 'Driver_Pay_CAD', 'Fuel_Cost', 'Profit_CAD']:
             formatted_totals[col] = formatted_totals[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
+
+        # Format distance column to 1 decimal place
+        formatted_totals['Bill_Distance_Miles'] = formatted_totals['Bill_Distance_Miles'].apply(
+            lambda x: f"{x:,.1f} miles" if pd.notna(x) and isinstance(x, (float, int)) else x
+        )
 
         # Rename columns for display
         formatted_totals.rename(columns={
@@ -842,6 +846,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("Summary of All Power Units:")
         st.dataframe(formatted_totals, use_container_width=True)
-        
+
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
