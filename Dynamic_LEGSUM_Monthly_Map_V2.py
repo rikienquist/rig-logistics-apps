@@ -493,7 +493,10 @@ st.header(f"Table and Map for Power Unit - {month_year_title}")
 # Handle missing locations
 merged_df, missing_locations = handle_missing_locations(merged_df)
 
-# Get power unit and driver options
+# Ensure all values in LS_POWER_UNIT are strings
+merged_df['LS_POWER_UNIT'] = merged_df['LS_POWER_UNIT'].astype(str)
+
+# Generate sorted options for the dropdown
 punit_options = sorted(merged_df['LS_POWER_UNIT'].unique())
 selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
 
