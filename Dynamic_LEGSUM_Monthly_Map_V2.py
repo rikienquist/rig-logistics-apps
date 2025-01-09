@@ -266,7 +266,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             st.write(bill_table)
 
 
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_owner_ops_fuel_file and uploaded_company_trucks_fuel_file:
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     # Preprocess and merge data
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
