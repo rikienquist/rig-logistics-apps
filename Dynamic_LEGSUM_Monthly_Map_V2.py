@@ -146,7 +146,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
-    isaac_fuel_df = preprocess_isaac_fuel(uploaded_isaac_fuel_file)
+    isaac_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_fuel_file)
 
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(
