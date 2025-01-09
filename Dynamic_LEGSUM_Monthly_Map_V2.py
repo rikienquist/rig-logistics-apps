@@ -777,72 +777,73 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
-        # Ensure numeric values for calculations
-        merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce').fillna(0)
-        merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce').fillna(0)
-        merged_df['DISTANCE'] = pd.to_numeric(merged_df['DISTANCE'], errors='coerce').fillna(0)
-        merged_df['FUEL_QUANTITY_L'] = pd.to_numeric(merged_df['FUEL_QUANTITY_L'], errors='coerce').fillna(0)
-        merged_df['Driver Pay (CAD)'] = pd.to_numeric(merged_df['TOTAL_PAY_SUM'], errors='coerce').fillna(0)
-        
-        # Calculate Total Charge (CAD) based on currency
-        merged_df['TOTAL_CHARGE_CAD'] = np.where(
-            merged_df['CURRENCY_CODE'] == 'USD',
-            (merged_df['CHARGES'] + merged_df['XCHARGES']) * 1.38,
-            merged_df['CHARGES'] + merged_df['XCHARGES']
-        )
 
-        # Calculate Bill Distance (miles)
-        merged_df['Bill Distance (miles)'] = np.where(
-            merged_df['DISTANCE_UNITS'] == 'KM',
-            merged_df['DISTANCE'] * 0.62,  # Convert KM to miles
-            merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
-        )
-
-        # Determine if the power unit is an Owner Operator
-        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units from Owner Ops
-        merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)
-
-        # Group by LS_POWER_UNIT and calculate totals
-        power_unit_totals = merged_df.groupby('LS_POWER_UNIT').apply(
-            lambda group: pd.Series({
-                'Type': 'Owner Ops' if group['Is Owner Operator'].iloc[0] else 'Company Truck',
-                'Total Charge (CAD)': group['TOTAL_CHARGE_CAD'].sum(),
-                'Bill Distance (miles)': group['Bill Distance (miles)'].sum(),
-                'Revenue per Mile': (
-                    group['TOTAL_CHARGE_CAD'].sum() / group['Bill Distance (miles)'].sum()
-                    if group['Bill Distance (miles)'].sum() > 0 else 0
-                ),
-                'Driver Pay (CAD)': group['Driver Pay (CAD)'].sum(),
-                'Lease Cost': 3100 if group['Is Owner Operator'].iloc[0] else 0,
-                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,
-                'Profit (CAD)': (
-                    group['TOTAL_CHARGE_CAD'].sum()
-                    - group['Driver Pay (CAD)'].sum()
-                    - (3100 if group['Is Owner Operator'].iloc[0] else 0)
-                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)
-                )
-            })
+        # Group data by LS_POWER_UNIT
+        power_unit_totals = merged_df.groupby('LS_POWER_UNIT').agg(
+            Type=('Is Owner Operator', lambda x: 'Owner Ops' if x.iloc[0] else 'Company Truck'),
+            Total_Charge_CAD=('TOTAL_CHARGE_CAD', 'sum'),
+            Bill_Distance_Miles=('Bill Distance (miles)', 'sum'),
+            Revenue_per_Mile=('TOTAL_CHARGE_CAD', lambda x: x.sum() / merged_df.loc[x.index, 'Bill Distance (miles)'].sum()
+                              if merged_df.loc[x.index, 'Bill Distance (miles)'].sum() != 0 else 0),
+            Driver_Pay_CAD=('Driver Pay (CAD)', 'sum'),
+            Fuel_Cost=('Fuel Cost', 'sum'),
         ).reset_index()
 
-        # Rename columns for clarity
-        power_unit_totals.rename(columns={
-            'LS_POWER_UNIT': 'Power Unit',
-            'Type': 'Type (Owner Ops or Company Truck)',
-        }, inplace=True)
+        # Apply lease cost logic
+        lease_cost = 3100  # Fixed lease cost for Owner Ops
+        power_unit_totals['Lease Cost'] = np.where(
+            power_unit_totals['Type'] == 'Owner Ops',
+            lease_cost,
+            0  # No lease cost for Company Trucks
+        )
+
+        # Calculate profit for each power unit
+        power_unit_totals['Profit_CAD'] = (
+            power_unit_totals['Total_Charge_CAD'] -
+            power_unit_totals['Driver_Pay_CAD'] -
+            power_unit_totals['Lease Cost'] -
+            power_unit_totals['Fuel_Cost']
+        )
+
+        # Add a grand total row
+        grand_totals = {
+            "LS_POWER_UNIT": "Grand Totals",
+            "Type": "",
+            "Total_Charge_CAD": power_unit_totals["Total_Charge_CAD"].sum(),
+            "Bill_Distance_Miles": power_unit_totals["Bill_Distance_Miles"].sum(),
+            "Revenue_per_Mile": power_unit_totals["Total_Charge_CAD"].sum() / power_unit_totals["Bill_Distance_Miles"].sum()
+            if power_unit_totals["Bill_Distance_Miles"].sum() != 0 else 0,
+            "Driver_Pay_CAD": power_unit_totals["Driver_Pay_CAD"].sum(),
+            "Lease Cost": power_unit_totals["Lease Cost"].sum(),  # Sum of lease costs
+            "Fuel_Cost": power_unit_totals["Fuel_Cost"].sum(),
+            "Profit_CAD": power_unit_totals["Profit_CAD"].sum()
+        }
+        power_unit_totals = pd.concat([power_unit_totals, pd.DataFrame([grand_totals])], ignore_index=True)
 
         # Format numeric columns for display
-        numeric_columns = [
-            'Total Charge (CAD)', 'Bill Distance (miles)', 'Revenue per Mile',
-            'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
-        ]
-        for col in numeric_columns:
-            power_unit_totals[col] = power_unit_totals[col].apply(
+        formatted_totals = power_unit_totals.copy()
+        for col in ['Total_Charge_CAD', 'Bill_Distance_Miles', 'Revenue_per_Mile',
+                    'Driver_Pay_CAD', 'Lease Cost', 'Fuel_Cost', 'Profit_CAD']:
+            formatted_totals[col] = formatted_totals[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
 
+        # Rename columns for display
+        formatted_totals.rename(columns={
+            'LS_POWER_UNIT': 'Power Unit',
+            'Total_Charge_CAD': 'Total Charge (CAD)',
+            'Bill_Distance_Miles': 'Bill Distance (miles)',
+            'Revenue_per_Mile': 'Revenue per Mile',
+            'Driver_Pay_CAD': 'Driver Pay (CAD)',
+            'Fuel_Cost': 'Fuel Cost',
+            'Profit_CAD': 'Profit (CAD)'
+        }, inplace=True)
+
         # Display the table
-        st.write("### Summary of Grand Totals for All Power Units")
-        st.dataframe(power_unit_totals, use_container_width=True)
+        st.write("Summary of All Power Units:")
+        st.dataframe(formatted_totals, use_container_width=True)
+else:
+    st.warning("Please upload all required files to see the All Grand Totals section.")
         
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
