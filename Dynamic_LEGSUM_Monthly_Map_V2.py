@@ -141,129 +141,144 @@ def calculate_haversine(df):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
     return R * c
 
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
-    # Load and preprocess data
+def load_and_preprocess_data(uploaded_legsum_file, uploaded_tlorder_driverpay_file, 
+                             uploaded_isaac_owner_ops_file, uploaded_isaac_company_trucks_file):
+    """
+    Load and preprocess data files, including LEGSUM, TLORDER+DRIVERPAY, and ISAAC Fuel Reports.
+    """
+    # Load city coordinates
     city_coordinates_df = load_city_coordinates()
+    
+    # Preprocess LEGSUM and TLORDER+DRIVERPAY
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
+    
+    # Combine ISAAC Fuel Reports if both are uploaded
+    isaac_combined_fuel_df = None
     if uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
-        # Combine the two ISAAC Fuel Reports
         isaac_combined_fuel_df = pd.concat(
-            [preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file), preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)],
+            [
+                preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file),
+                preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
+            ],
             ignore_index=True
         )
-    else:
-        isaac_combined_fuel_df = None
 
-
-    # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
+    # Merge data into a single DataFrame
     merged_df = legsum_df.merge(
         tlorder_driverpay_df,
         left_on='LS_FREIGHT',
         right_on='BILL_NUMBER',
         how='left'
     )
-
-    # Merge ISAAC Fuel Report into the merged_df on LS_POWER_UNIT and VEHICLE_NO
-    merged_df = merged_df.merge(
-        isaac_combined_fuel_df,
-        left_on='LS_POWER_UNIT',
-        right_on='VEHICLE_NO',
-        how='left'
-    )
-
-    # drop VEHICLE_NO from the final DataFrame
-    merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
-
-    # Add a province column for both origin and destination from TLORDER data
-    merged_df['ORIGPROV'] = merged_df['ORIGPROV']  # Use ORIGPROV from TLORDER
-    merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use DESTPROV from TLORDER
-
-    st.header("Power Unit Finder")
-
-    # Dropdown for Customer (CALLNAME) - no "All" option
-    callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
-    selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
-
-    # Filter data for selected customer
-    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
-
-    # Dropdowns for Origin and Destination Provinces
-    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
-    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
-
-    selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
-    selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
-
-    # Add Start Date and End Date filtering with unique keys
-    st.write("### Select Date Range:")
-    if not filtered_data.empty:
-        min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
-        max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
     
-        # Use unique keys for each date_input
-        start_date = st.date_input(
-            "Start Date", 
-            value=min_date, 
-            min_value=min_date, 
-            max_value=max_date, 
-            key=f"start_date_{selected_callname}"
+    if isaac_combined_fuel_df is not None:
+        merged_df = merged_df.merge(
+            isaac_combined_fuel_df,
+            left_on='LS_POWER_UNIT',
+            right_on='VEHICLE_NO',
+            how='left'
         )
-        end_date = st.date_input(
-            "End Date", 
-            value=max_date, 
-            min_value=min_date, 
-            max_value=max_date, 
-            key=f"end_date_{selected_callname}"
-        )
+        merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
+
+    # Add province columns (if applicable)
+    if 'ORIGPROV' in merged_df and 'DESTPROV' in merged_df:
+        merged_df['ORIGPROV'] = merged_df['ORIGPROV']
+        merged_df['DESTPROV'] = merged_df['DESTPROV']
     
-        # Apply date range filter
-        filtered_data = filtered_data[
-            (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
-            (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
-        ]
+    return merged_df
 
-    # Handle combined ORIGPROV and DESTPROV filtering
-    if selected_origprov != "All" or selected_destprov != "All":
-        # Identify BILL_NUMBERs satisfying the selected ORIGPROV or DESTPROV
-        valid_bills = filtered_data[
-            ((filtered_data['ORIGPROV'] == selected_origprov) | (selected_origprov == "All")) &
-            ((filtered_data['DESTPROV'] == selected_destprov) | (selected_destprov == "All"))
-        ]['BILL_NUMBER'].unique()
 
-        # Filter the original dataset to include all legs for these BILL_NUMBERs
-        filtered_data = filtered_data[filtered_data['BILL_NUMBER'].isin(valid_bills)]
+def display_power_unit_finder(merged_df):
+    """
+    Display the 'Power Unit Finder' section of the app.
+    """
+    with st.expander("Power Unit Finder", expanded=True):  # Collapsible section
+        st.header("Power Unit Finder")
 
-    if filtered_data.empty:
-        st.warning("No results found for the selected criteria.")
-    else:
-        # Group data by BILL_NUMBER and display separate tables for each
-        grouped = filtered_data.groupby('BILL_NUMBER')
-        for bill_number, group in grouped:
-            # Get the overall ORIGPROV -> DESTPROV for the BILL_NUMBER
-            bill_origprov = group['ORIGPROV'].iloc[0]
-            bill_destprov = group['DESTPROV'].iloc[0]
+        # Dropdown for Customer (CALLNAME)
+        callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
+        selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
 
-            # Display the BILL_NUMBER and its ORIGPROV -> DESTPROV
-            st.write(f"### Bill Number: {bill_number} ({bill_origprov} to {bill_destprov})")
+        # Filter data for selected customer
+        filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
 
-            # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
-            group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+        # Dropdowns for Origin and Destination Provinces
+        origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
+        destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
 
-            # Create a table showing movements for the bill number
-            bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
-                columns={
-                    'LS_POWER_UNIT': 'Power Unit',
-                    'LEGO_ZONE_DESC': 'Origin',
-                    'LEGD_ZONE_DESC': 'Destination',
-                    'LS_LEG_SEQ': 'Sequence',
-                    'LS_ACTUAL_DATE': 'Date'
-                }
+        selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
+        selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
+
+        # Add Date Range Filtering
+        st.write("### Select Date Range:")
+        if not filtered_data.empty:
+            min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
+            max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+
+            start_date = st.date_input(
+                "Start Date",
+                value=min_date,
+                min_value=min_date,
+                max_value=max_date,
+                key=f"start_date_{selected_callname}"
             )
-            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
+            end_date = st.date_input(
+                "End Date",
+                value=max_date,
+                min_value=min_date,
+                max_value=max_date,
+                key=f"end_date_{selected_callname}"
+            )
 
-            # Display the table for this bill number
-            st.write(bill_table)
+            # Apply date range filter
+            filtered_data = filtered_data[
+                (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+                (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+            ]
+
+        # Handle combined ORIGPROV and DESTPROV filtering
+        if selected_origprov != "All" or selected_destprov != "All":
+            valid_bills = filtered_data[
+                ((filtered_data['ORIGPROV'] == selected_origprov) | (selected_origprov == "All")) &
+                ((filtered_data['DESTPROV'] == selected_destprov) | (selected_destprov == "All"))
+            ]['BILL_NUMBER'].unique()
+
+            # Filter original dataset to include all legs for these BILL_NUMBERs
+            filtered_data = filtered_data[filtered_data['BILL_NUMBER'].isin(valid_bills)]
+
+        if filtered_data.empty:
+            st.warning("No results found for the selected criteria.")
+        else:
+            grouped = filtered_data.groupby('BILL_NUMBER')
+            for bill_number, group in grouped:
+                # Get overall ORIGPROV -> DESTPROV for the BILL_NUMBER
+                bill_origprov = group['ORIGPROV'].iloc[0]
+                bill_destprov = group['DESTPROV'].iloc[0]
+
+                # Display the BILL_NUMBER and its ORIGPROV -> DESTPROV
+                st.write(f"### Bill Number: {bill_number} ({bill_origprov} to {bill_destprov})")
+
+                # Sort and display the data
+                group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+                bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
+                    columns={
+                        'LS_POWER_UNIT': 'Power Unit',
+                        'LEGO_ZONE_DESC': 'Origin',
+                        'LEGD_ZONE_DESC': 'Destination',
+                        'LS_LEG_SEQ': 'Sequence',
+                        'LS_ACTUAL_DATE': 'Date'
+                    }
+                )
+                bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
+                st.write(bill_table)
+
+
+# Main logic
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
+    merged_df = load_and_preprocess_data(uploaded_legsum_file, uploaded_tlorder_driverpay_file, 
+                                         uploaded_isaac_owner_ops_file, uploaded_isaac_company_trucks_file)
+    display_power_unit_finder(merged_df)
 
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
