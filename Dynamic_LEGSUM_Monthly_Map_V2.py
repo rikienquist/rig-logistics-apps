@@ -774,60 +774,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             if not missing_locations.empty:
                 st.write("### Locations Missing Coordinates")
                 st.dataframe(missing_locations, use_container_width=True)
-                
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
-    with st.expander("All Grand Totals"):
-
-        # Group data by LS_POWER_UNIT to calculate the grand totals for each unit
-        power_unit_totals = merged_df.groupby('LS_POWER_UNIT').agg(
-            Type=('Is Owner Operator', lambda x: 'Owner Ops' if x.iloc[0] else 'Company Truck'),
-            Total_Charge_CAD=('TOTAL_CHARGE_CAD', 'sum'),
-            Bill_Distance_Miles=('Bill Distance (miles)', 'sum'),
-            Revenue_per_Mile=('TOTAL_CHARGE_CAD', lambda x: x.sum() / merged_df.loc[x.index, 'Bill Distance (miles)'].sum() 
-                              if merged_df.loc[x.index, 'Bill Distance (miles)'].sum() != 0 else 0),
-            Driver_Pay_CAD=('Driver Pay (CAD)', 'sum'),
-            Fuel_Cost=('Fuel Cost', 'sum'),
-        ).reset_index()
-
-        # Add Lease Cost column
-        power_unit_totals['Lease Cost'] = np.where(
-            power_unit_totals['Type'] == 'Owner Ops',
-            3100,  # Fixed lease cost for Owner Ops
-            0  # No lease cost for Company Trucks
-        )
-
-        # Calculate Profit for each power unit
-        power_unit_totals['Profit_CAD'] = (
-            power_unit_totals['Total_Charge_CAD'] -
-            power_unit_totals['Driver_Pay_CAD'] -
-            power_unit_totals['Lease Cost'] -
-            power_unit_totals['Fuel_Cost']
-        )
-
-        # Format numeric columns for display
-        formatted_totals = power_unit_totals.copy()
-        for col in ['Total_Charge_CAD', 'Bill_Distance_Miles', 'Revenue_per_Mile', 
-                    'Driver_Pay_CAD', 'Lease Cost', 'Fuel_Cost', 'Profit_CAD']:
-            formatted_totals[col] = formatted_totals[col].apply(
-                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
-            )
-
-        # Rename columns for display
-        formatted_totals.rename(columns={
-            'LS_POWER_UNIT': 'Power Unit',
-            'Total_Charge_CAD': 'Total Charge (CAD)',
-            'Bill_Distance_Miles': 'Bill Distance (miles)',
-            'Revenue_per_Mile': 'Revenue per Mile',
-            'Driver_Pay_CAD': 'Driver Pay (CAD)',
-            'Fuel_Cost': 'Fuel Cost',
-            'Profit_CAD': 'Profit (CAD)'
-        }, inplace=True)
-
-        # Display the table
-        st.dataframe(formatted_totals, use_container_width=True)
-
-else:
-    st.warning("Please upload all required files to see the All Grand Totals section.")
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
