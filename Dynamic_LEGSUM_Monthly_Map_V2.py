@@ -146,7 +146,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
-    isaac_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_fuel_file)
+    if uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
+        # Combine the two ISAAC Fuel Reports
+        isaac_combined_fuel_df = pd.concat(
+            [preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file), preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)],
+            ignore_index=True
+        )
+    else:
+        isaac_combined_fuel_df = None
+
 
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(
@@ -158,7 +166,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
 
     # Merge ISAAC Fuel Report into the merged_df on LS_POWER_UNIT and VEHICLE_NO
     merged_df = merged_df.merge(
-        isaac_fuel_df,
+        isaac_combined_fuel_df,
         left_on='LS_POWER_UNIT',
         right_on='VEHICLE_NO',
         how='left'
