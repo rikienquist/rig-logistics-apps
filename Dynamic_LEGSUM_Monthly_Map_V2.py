@@ -489,9 +489,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Bill Distance (miles)": "Bill Distance (miles)"
         })
         
-        # Add fixed lease cost and calculate fuel cost for the selected power unit
+        # Add fixed lease cost only for Owner Operators
         lease_cost = 3100  # Fixed lease cost in CAD
+        merged_df['Lease Cost'] = np.where(merged_df['Is Owner Operator'], lease_cost, 0)  # Apply lease cost conditionally
+    
+        # Calculate fuel cost
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
+        merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
         # Calculate fuel cost for the selected power unit
         grand_fuel_cost = filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in filtered_view else 0
