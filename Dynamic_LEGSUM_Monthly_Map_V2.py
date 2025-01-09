@@ -777,42 +777,53 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
-        # Extract Grand Totals for All Power Units from the Route Summary
-        all_grand_totals = (
-            route_summary_df[route_summary_df['Route'] == "Grand Totals"]  # Filter only grand totals rows
-            .groupby('LS_POWER_UNIT', as_index=False)  # Group by power unit
-            .agg({
-                "Total Charge (CAD)": "sum",
-                "Bill Distance (miles)": "sum",
-                "Revenue per Mile": "mean",  # Revenue per mile is already calculated
-                "Driver Pay (CAD)": "sum",
-                "Lease Cost": "sum",  # Owner Ops will have 3100; others 0
-                "Fuel Cost": "sum",
-                "Profit (CAD)": "sum"
-            })
-        )
+        # Ensure the columns needed for calculations are present and clean
+        merged_df['TOTAL_CHARGE_CAD'] = pd.to_numeric(merged_df['TOTAL_CHARGE_CAD'], errors='coerce').fillna(0)
+        merged_df['Bill Distance (miles)'] = pd.to_numeric(merged_df['Bill Distance (miles)'], errors='coerce').fillna(0)
+        merged_df['Driver Pay (CAD)'] = pd.to_numeric(merged_df['Driver Pay (CAD)'], errors='coerce').fillna(0)
+        merged_df['FUEL_QUANTITY_L'] = pd.to_numeric(merged_df['FUEL_QUANTITY_L'], errors='coerce').fillna(0)
 
-        # Add the Type (Owner Ops or Company Truck) column
-        all_grand_totals["Type (Owner Ops or Company Truck)"] = all_grand_totals['LS_POWER_UNIT'].apply(
-            lambda pu: "Owner Ops" if pu in owner_ops_units else "Company Truck"
-        )
+        # Group data by LS_POWER_UNIT and calculate aggregated metrics
+        power_unit_totals = merged_df.groupby('LS_POWER_UNIT').apply(
+            lambda group: pd.Series({
+                'Type': 'Owner Ops' if group['Is Owner Operator'].iloc[0] else 'Company Truck',
+                'Total Charge (CAD)': group['TOTAL_CHARGE_CAD'].sum(),
+                'Bill Distance (miles)': group['Bill Distance (miles)'].sum(),
+                'Revenue per Mile': (
+                    group['TOTAL_CHARGE_CAD'].sum() / group['Bill Distance (miles)'].sum()
+                    if group['Bill Distance (miles)'].sum() > 0 else 0
+                ),
+                'Driver Pay (CAD)': group['Driver Pay (CAD)'].sum(),
+                'Lease Cost': 3100 if group['Is Owner Operator'].iloc[0] else 0,
+                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,  # Calculate Fuel Cost
+                'Profit (CAD)': (
+                    group['TOTAL_CHARGE_CAD'].sum()
+                    - group['Driver Pay (CAD)'].sum()
+                    - (3100 if group['Is Owner Operator'].iloc[0] else 0)
+                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)  # Deduct accurate Fuel Cost
+                )
+            })
+        ).reset_index()
 
         # Formatting numeric columns for display
         numeric_columns = [
-            "Total Charge (CAD)", "Bill Distance (miles)", "Revenue per Mile",
-            "Driver Pay (CAD)", "Lease Cost", "Fuel Cost", "Profit (CAD)"
+            'Total Charge (CAD)', 'Bill Distance (miles)', 'Revenue per Mile',
+            'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
         ]
         for col in numeric_columns:
-            all_grand_totals[col] = all_grand_totals[col].apply(
+            power_unit_totals[col] = power_unit_totals[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
 
-        # Rename columns for clarity
-        all_grand_totals.rename(columns={"LS_POWER_UNIT": "Power Unit"}, inplace=True)
+        # Rename columns for better readability
+        power_unit_totals.rename(columns={
+            'LS_POWER_UNIT': 'Power Unit',
+            'Type': 'Type (Owner Ops or Company Truck)',
+        }, inplace=True)
 
-        # Display the All Grand Totals table
+        # Display the "All Grand Totals" table
         st.write("### Summary of Grand Totals for All Power Units")
-        st.dataframe(all_grand_totals, use_container_width=True)
+        st.dataframe(power_unit_totals, use_container_width=True)
         
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
