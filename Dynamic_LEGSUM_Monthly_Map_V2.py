@@ -531,6 +531,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Highlight": None,
             "LS_POWER_UNIT": ""
         }])
+
+        st.write("Debugging Lease Cost Calculation:")
+        st.write(f"Number of Unique Owner Operator Units: {len(unique_owner_operators)}")
+        st.write(f"Fixed Lease Cost per Unit: {lease_cost}")
+        st.write(f"Total Lease Cost: {total_lease_cost}")
+
         
         # Add Lease Cost and Fuel Cost columns to the route summary
         route_summary_df["Lease Cost"] = np.nan
