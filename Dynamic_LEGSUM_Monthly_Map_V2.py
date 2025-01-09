@@ -799,6 +799,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             lease_cost_total = lease_cost if is_owner_ops else 0
             profit = total_charge - driver_pay - lease_cost_total - fuel_cost
 
+            # Append to all_totals (including all calculated metrics)
             all_totals.append({
                 "Power Unit": power_unit,
                 "Type": "Owner Ops" if is_owner_ops else "Company Truck",
