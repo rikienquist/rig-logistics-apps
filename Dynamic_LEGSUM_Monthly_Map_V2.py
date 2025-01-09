@@ -777,13 +777,32 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
-        # Ensure the columns needed for calculations are present and clean
-        merged_df['TOTAL_CHARGE_CAD'] = pd.to_numeric(merged_df['TOTAL_CHARGE_CAD'], errors='coerce').fillna(0)
-        merged_df['Bill Distance (miles)'] = pd.to_numeric(merged_df['Bill Distance (miles)'], errors='coerce').fillna(0)
-        merged_df['Driver Pay (CAD)'] = pd.to_numeric(merged_df['Driver Pay (CAD)'], errors='coerce').fillna(0)
+        # Ensure numeric values for calculations
+        merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce').fillna(0)
+        merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce').fillna(0)
+        merged_df['DISTANCE'] = pd.to_numeric(merged_df['DISTANCE'], errors='coerce').fillna(0)
         merged_df['FUEL_QUANTITY_L'] = pd.to_numeric(merged_df['FUEL_QUANTITY_L'], errors='coerce').fillna(0)
+        merged_df['Driver Pay (CAD)'] = pd.to_numeric(merged_df['TOTAL_PAY_SUM'], errors='coerce').fillna(0)
+        
+        # Calculate Total Charge (CAD) based on currency
+        merged_df['TOTAL_CHARGE_CAD'] = np.where(
+            merged_df['CURRENCY_CODE'] == 'USD',
+            (merged_df['CHARGES'] + merged_df['XCHARGES']) * 1.38,
+            merged_df['CHARGES'] + merged_df['XCHARGES']
+        )
 
-        # Group data by LS_POWER_UNIT and calculate aggregated metrics
+        # Calculate Bill Distance (miles)
+        merged_df['Bill Distance (miles)'] = np.where(
+            merged_df['DISTANCE_UNITS'] == 'KM',
+            merged_df['DISTANCE'] * 0.62,  # Convert KM to miles
+            merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
+        )
+
+        # Determine if the power unit is an Owner Operator
+        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units from Owner Ops
+        merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)
+
+        # Group by LS_POWER_UNIT and calculate totals
         power_unit_totals = merged_df.groupby('LS_POWER_UNIT').apply(
             lambda group: pd.Series({
                 'Type': 'Owner Ops' if group['Is Owner Operator'].iloc[0] else 'Company Truck',
@@ -795,17 +814,23 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 ),
                 'Driver Pay (CAD)': group['Driver Pay (CAD)'].sum(),
                 'Lease Cost': 3100 if group['Is Owner Operator'].iloc[0] else 0,
-                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,  # Calculate Fuel Cost
+                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,
                 'Profit (CAD)': (
                     group['TOTAL_CHARGE_CAD'].sum()
                     - group['Driver Pay (CAD)'].sum()
                     - (3100 if group['Is Owner Operator'].iloc[0] else 0)
-                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)  # Deduct accurate Fuel Cost
+                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)
                 )
             })
         ).reset_index()
 
-        # Formatting numeric columns for display
+        # Rename columns for clarity
+        power_unit_totals.rename(columns={
+            'LS_POWER_UNIT': 'Power Unit',
+            'Type': 'Type (Owner Ops or Company Truck)',
+        }, inplace=True)
+
+        # Format numeric columns for display
         numeric_columns = [
             'Total Charge (CAD)', 'Bill Distance (miles)', 'Revenue per Mile',
             'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
@@ -815,13 +840,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
 
-        # Rename columns for better readability
-        power_unit_totals.rename(columns={
-            'LS_POWER_UNIT': 'Power Unit',
-            'Type': 'Type (Owner Ops or Company Truck)',
-        }, inplace=True)
-
-        # Display the "All Grand Totals" table
+        # Display the table
         st.write("### Summary of Grand Totals for All Power Units")
         st.dataframe(power_unit_totals, use_container_width=True)
         
