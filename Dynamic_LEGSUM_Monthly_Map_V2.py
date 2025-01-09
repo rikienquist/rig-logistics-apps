@@ -786,11 +786,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         for power_unit in merged_df['LS_POWER_UNIT'].unique():
             # Filter data for the power unit
             power_unit_data = merged_df[merged_df['LS_POWER_UNIT'] == power_unit]
-            
+
             # Check if Owner Ops
             is_owner_ops = power_unit in set(owner_ops_fuel_df['VEHICLE_NO'])
 
-            # Calculate individual metrics
+            # Calculate individual metrics (BEFORE formatting)
             total_charge = power_unit_data['TOTAL_CHARGE_CAD'].sum()
             bill_distance = power_unit_data['Bill Distance (miles)'].sum()
             revenue_per_mile = total_charge / bill_distance if bill_distance > 0 else 0
@@ -799,7 +799,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             lease_cost_total = lease_cost if is_owner_ops else 0
             profit = total_charge - driver_pay - lease_cost_total - fuel_cost
 
-            # Append to all_totals
             all_totals.append({
                 "Power Unit": power_unit,
                 "Type": "Owner Ops" if is_owner_ops else "Company Truck",
@@ -815,14 +814,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Create DataFrame for all totals
         all_totals_df = pd.DataFrame(all_totals)
 
-        # Calculate grand totals across all power units
+        # Calculate grand totals (using the numeric DataFrame)
         grand_total_row = {
             "Power Unit": "Grand Totals",
             "Type": "",
             "Total Charge (CAD)": all_totals_df["Total Charge (CAD)"].sum(),
             "Bill Distance (miles)": all_totals_df["Bill Distance (miles)"].sum(),
-            "Revenue per Mile": all_totals_df["Total Charge (CAD)"].sum() / all_totals_df["Bill Distance (miles)"].sum()
-            if all_totals_df["Bill Distance (miles)"].sum() > 0 else 0,
+            "Revenue per Mile": all_totals_df["Total Charge (CAD)"].sum() / all_totals_df["Bill Distance (miles)"].sum() if all_totals_df["Bill Distance (miles)"].sum() > 0 else 0,
             "Driver Pay (CAD)": all_totals_df["Driver Pay (CAD)"].sum(),
             "Lease Cost": all_totals_df["Lease Cost"].sum(),
             "Fuel Cost": all_totals_df["Fuel Cost"].sum(),
@@ -832,14 +830,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Append grand total row to DataFrame
         all_totals_df = pd.concat([all_totals_df, pd.DataFrame([grand_total_row])], ignore_index=True)
 
-        # Format numeric columns for display
+        # Format numeric columns for display (AFTER calculations)
         formatted_totals_df = all_totals_df.copy()
         for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Lease Cost", "Fuel Cost", "Profit (CAD)"]:
-            formatted_totals_df[col] = formatted_totals_df[col].apply(
-                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
-            )
+            formatted_totals_df[col] = formatted_totals_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+        for col in ["Bill Distance (miles)"]:
+            formatted_totals_df[col] = formatted_totals_df[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
 
-        # Rename columns for display
+
+        # Rename columns for display (This part was correct)
         formatted_totals_df.rename(columns={
             "Power Unit": "Power Unit",
             "Type": "Type",
