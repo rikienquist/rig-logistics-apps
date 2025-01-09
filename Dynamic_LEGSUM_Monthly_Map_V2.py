@@ -502,7 +502,22 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
         # Calculate fuel cost for the selected power unit
-        grand_fuel_cost = filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in filtered_view else 0
+        grand_fuel_cost = (
+            filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier 
+            if 'FUEL_QUANTITY_L' in filtered_view and not filtered_view.empty else 0
+        )
+        
+        # Add Lease Cost column to route summary, showing $3100 for each Owner Ops truck
+        route_summary_df['Lease Cost'] = np.where(
+            route_summary_df["LS_POWER_UNIT"].isin(owner_ops_units),
+            lease_cost,  # $3100 for Owner Ops
+            0  # $0 for others
+        )
+        
+        # Add Fuel Cost column to the route summary, using a default value of 0 if missing
+        route_summary_df['Fuel Cost'] = np.nan  # Initialize Fuel Cost column
+        if 'FUEL_QUANTITY_L' in filtered_view:
+            route_summary_df['Fuel Cost'] = filtered_view['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
         # Create the Grand Totals row
         grand_totals = pd.DataFrame([{
@@ -527,16 +542,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Highlight": None,
             "LS_POWER_UNIT": ""
         }])
-        
-        # Add Lease Cost column to route summary, showing $3100 for each Owner Ops truck
-        route_summary_df["Lease Cost"] = np.where(
-            route_summary_df["LS_POWER_UNIT"].isin(owner_ops_units),
-            lease_cost,  # $3100 for Owner Ops
-            0  # $0 for others
-        )
-        
-        # Add Fuel Cost column to the route summary
-        route_summary_df["Fuel Cost"] = route_summary_df["Fuel Cost"]  # Keep calculated fuel cost values
         
         # Append the Grand Total row
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
