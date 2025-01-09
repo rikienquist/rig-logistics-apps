@@ -504,7 +504,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Calculate fuel cost for the selected power unit
         grand_fuel_cost = filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in filtered_view else 0
         
-        # Calculate grand totals, including lease cost and fuel cost
+        # Deduplicate Owner Operator rows to ensure lease cost is applied only once per unit
+        unique_owner_operators = merged_df[merged_df['Is Owner Operator']][['LS_POWER_UNIT']].drop_duplicates()
+        total_lease_cost = len(unique_owner_operators) * lease_cost  # Calculate total lease cost
+        
         grand_totals = pd.DataFrame([{
             "Route": "Grand Totals",
             "From Zone": "",
@@ -517,11 +520,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
             if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
             "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
-            "Lease Cost": merged_df.loc[merged_df['Is Owner Operator'], 'Lease Cost'].sum(),
+            "Lease Cost": total_lease_cost,  # Use calculated lease cost
             "Fuel Cost": grand_fuel_cost,
             "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() -
                             route_summary_df["Driver Pay (CAD)"].sum() -
-                            lease_cost -
+                            total_lease_cost -  # Corrected lease cost
                             grand_fuel_cost,
             "LS_ACTUAL_DATE": "",
             "LS_LEG_NOTE": "",
