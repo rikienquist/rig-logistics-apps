@@ -489,64 +489,82 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "Bill Distance (miles)": "Bill Distance (miles)"
         })
 
-        # Check if each power unit is in the Owner Ops report
+        # Identify if each power unit is an Owner Operator
         owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
         merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
         
-        # Add fixed lease cost only for Owner Operators
+        # Set lease cost for Owner Ops
         lease_cost = 3100  # Fixed lease cost in CAD
-        merged_df['Lease Cost'] = np.where(merged_df['Is Owner Operator'], lease_cost, 0)  # Apply $3100 for Owner Ops only
         
-        # Calculate fuel cost
+        # Calculate Fuel Cost
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
-        # Calculate fuel cost for the selected power unit
+        # Calculate Fuel Cost for the selected power unit
         grand_fuel_cost = (
-            filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier 
+            filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier
             if 'FUEL_QUANTITY_L' in filtered_view and not filtered_view.empty else 0
         )
         
-        # Add Lease Cost column to route summary, showing $3100 for each Owner Ops truck
-        route_summary_df['Lease Cost'] = np.where(
-            route_summary_df["LS_POWER_UNIT"].isin(owner_ops_units),
-            lease_cost,  # $3100 for Owner Ops
-            0  # $0 for others
-        )
+        # Add Lease Cost column to the route summary
+        route_summary_df['Lease Cost'] = ""  # Initialize as blank for all rows
         
-        # Add Fuel Cost column to the route summary, using a default value of 0 if missing
-        route_summary_df['Fuel Cost'] = np.nan  # Initialize Fuel Cost column
-        if 'FUEL_QUANTITY_L' in filtered_view:
-            route_summary_df['Fuel Cost'] = filtered_view['FUEL_QUANTITY_L'] * fuel_cost_multiplier
-        
-        # Create the Grand Totals row
-        grand_totals = pd.DataFrame([{
-            "Route": "Grand Totals",
-            "From Zone": "",
-            "To Zone": "",
-            "BILL_NUMBER": "",
-            "Customer": "",
-            "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
-            "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
-            "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
-            "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
-            if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
-            "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
-            "Lease Cost": "3100 per truck",  # Display fixed lease cost instead of summing
-            "Fuel Cost": grand_fuel_cost,
-            "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() -
-                            route_summary_df["Driver Pay (CAD)"].sum() -
-                            grand_fuel_cost,
-            "LS_ACTUAL_DATE": "",
-            "LS_LEG_NOTE": "",
-            "Highlight": None,
-            "LS_POWER_UNIT": ""
-        }])
+        # Add the Grand Totals row
+        if filtered_view['LS_POWER_UNIT'].iloc[0] in owner_ops_units:
+            # Owner Ops: Apply lease cost in the grand total row
+            total_lease_cost = lease_cost  # Lease cost is $3100
+            grand_totals = pd.DataFrame([{
+                "Route": "Grand Totals",
+                "From Zone": "",
+                "To Zone": "",
+                "BILL_NUMBER": "",
+                "Customer": "",
+                "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
+                "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
+                "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
+                "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
+                if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
+                "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
+                "Lease Cost": f"${lease_cost:,.2f}",  # Display $3100 in Grand Total row
+                "Fuel Cost": f"${grand_fuel_cost:,.2f}",
+                "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() -
+                                route_summary_df["Driver Pay (CAD)"].sum() -
+                                lease_cost -  # Include lease cost in profit calculation
+                                grand_fuel_cost,
+                "LS_ACTUAL_DATE": "",
+                "LS_LEG_NOTE": "",
+                "Highlight": None,
+                "LS_POWER_UNIT": ""
+            }])
+        else:
+            # Company Trucks: No lease cost in the grand total row
+            grand_totals = pd.DataFrame([{
+                "Route": "Grand Totals",
+                "From Zone": "",
+                "To Zone": "",
+                "BILL_NUMBER": "",
+                "Customer": "",
+                "Total Charge (CAD)": route_summary_df["Total Charge (CAD)"].sum(),
+                "Leg Distance (miles)": route_summary_df["Leg Distance (miles)"].sum(),
+                "Bill Distance (miles)": route_summary_df["Bill Distance (miles)"].sum(),
+                "Revenue per Mile": route_summary_df["Total Charge (CAD)"].sum() / route_summary_df["Bill Distance (miles)"].sum()
+                if route_summary_df["Bill Distance (miles)"].sum() != 0 else 0,
+                "Driver Pay (CAD)": route_summary_df["Driver Pay (CAD)"].sum(),
+                "Lease Cost": "",  # Blank for Company Trucks
+                "Fuel Cost": f"${grand_fuel_cost:,.2f}",
+                "Profit (CAD)": route_summary_df["Total Charge (CAD)"].sum() -
+                                route_summary_df["Driver Pay (CAD)"].sum() -
+                                grand_fuel_cost,  # No lease cost deduction
+                "LS_ACTUAL_DATE": "",
+                "LS_LEG_NOTE": "",
+                "Highlight": None,
+                "LS_POWER_UNIT": ""
+            }])
         
         # Append the Grand Total row
         route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
         
-        # Rearrange columns so Lease Cost and Fuel Cost appear after Driver Pay
+        # Rearrange columns to position Lease Cost and Fuel Cost appropriately
         route_summary_df = route_summary_df[
             [
                 "Route", "From Zone", "To Zone", "BILL_NUMBER", "Customer", "Total Charge (CAD)",
@@ -555,8 +573,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             ]
         ]
         
-        # Format currency and numeric columns
-        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)", "Lease Cost", "Fuel Cost"]:
+        # Format numeric columns for display
+        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)", "Fuel Cost"]:
             route_summary_df[col] = route_summary_df[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
