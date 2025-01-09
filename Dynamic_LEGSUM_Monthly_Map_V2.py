@@ -1,4 +1,4 @@
-### adding lease and fuel costs, changing it back to monthly
+### adding lease and fuel costs, grand total table 
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -44,7 +44,19 @@ Save the query results as CSV files and upload them below to visualize the data.
 # File upload section
 uploaded_legsum_file = st.file_uploader("Upload LEGSUM CSV file", type="csv")
 uploaded_tlorder_driverpay_file = st.file_uploader("Upload Pre-Merged TLORDER + DRIVERPAY CSV file", type="csv")
-uploaded_isaac_fuel_file = st.file_uploader("Upload ISAAC Fuel Report (Excel file)", type="xlsx")
+# File upload for the new ISAAC reports
+uploaded_isaac_owner_ops_file = st.file_uploader("Upload ISAAC Owner Ops Fuel Report (Excel file)", type="xlsx")
+uploaded_isaac_company_trucks_file = st.file_uploader("Upload ISAAC Company Trucks Fuel Report (Excel file)", type="xlsx")
+
+# Preprocess the ISAAC reports if both are uploaded
+if uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
+    isaac_owner_ops_df = preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file)
+    isaac_company_trucks_df = preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
+
+    # Combine the two reports into a single DataFrame
+    isaac_combined_fuel_df = pd.concat([isaac_owner_ops_df, isaac_company_trucks_df], ignore_index=True)
+else:
+    isaac_combined_fuel_df = None
 
 @st.cache_data
 def load_city_coordinates():
@@ -90,18 +102,18 @@ def preprocess_tlorder_driverpay(file):
     return df
 
 @st.cache_data
-def preprocess_isaac_fuel(file):
+def preprocess_new_isaac_fuel(file):
     """
-    Preprocess the ISAAC Fuel Report Excel file.
-    Sums up the total fuel quantity (l) for each individual vehicle number.
+    Preprocess the new ISAAC Fuel Report.
+    Extracts and aggregates total fuel quantity (liters) for each vehicle number.
     """
-    # Skip the first 8 rows and load the relevant sheet
-    fuel_df = pd.read_excel(file, skiprows=8)
+    # Load the Excel file
+    fuel_df = pd.read_excel(file)
 
     # Ensure column names are standardized
     fuel_df.rename(columns={
-        "Vehicle No": "VEHICLE_NO",
-        "Quantity (l)": "FUEL_QUANTITY_L"
+        "Unit": "VEHICLE_NO",
+        "Fuel (Litre)": "FUEL_QUANTITY_L"
     }, inplace=True)
 
     # Retain only relevant columns
@@ -246,12 +258,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
             st.write(bill_table)
 
 
-if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_fuel_file:
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_owner_ops_fuel_file and uploaded_company_trucks_fuel_file:
     # Preprocess and merge data
     city_coordinates_df = load_city_coordinates()
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
-    isaac_fuel_df = preprocess_isaac_fuel(uploaded_isaac_fuel_file)
+    
+    # Preprocess both ISAAC Fuel Reports
+    owner_ops_fuel_df = preprocess_new_isaac_fuel(uploaded_owner_ops_fuel_file)
+    company_trucks_fuel_df = preprocess_new_isaac_fuel(uploaded_company_trucks_fuel_file)
+
+    # Combine the two ISAAC Fuel Reports
+    isaac_combined_fuel_df = pd.concat([owner_ops_fuel_df, company_trucks_fuel_df], ignore_index=True)
 
     # Merge LEGSUM with TLORDER + DRIVERPAY
     merged_df = legsum_df.merge(
@@ -261,9 +279,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_f
         how='left'
     )
 
-    # Merge with ISAAC Fuel Report
+    # Merge with the combined ISAAC Fuel Report
     merged_df = merged_df.merge(
-        isaac_fuel_df,
+        isaac_combined_fuel_df,
         left_on='LS_POWER_UNIT',
         right_on='VEHICLE_NO',
         how='left'
