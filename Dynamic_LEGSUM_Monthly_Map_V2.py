@@ -776,85 +776,276 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 st.dataframe(missing_locations, use_container_width=True)
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
-    with st.expander("All Grand Totals"):
+    # Preprocess and merge data
+    city_coordinates_df = load_city_coordinates()
+    legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
+    tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
+    
+    # Preprocess both ISAAC Fuel Reports
+    owner_ops_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file)
+    company_trucks_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
 
-        # Group by power unit and calculate required totals
-        all_totals = []
-        lease_cost = 3100  # Fixed lease cost for Owner Ops
-        fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
+    # Combine the two ISAAC Fuel Reports
+    isaac_combined_fuel_df = pd.concat([owner_ops_fuel_df, company_trucks_fuel_df], ignore_index=True)
 
-        for power_unit in merged_df['LS_POWER_UNIT'].unique():
-            # Filter data for the power unit
-            power_unit_data = merged_df[merged_df['LS_POWER_UNIT'] == power_unit]
+    # Merge LEGSUM with TLORDER + DRIVERPAY
+    merged_df = legsum_df.merge(
+        tlorder_driverpay_df,
+        left_on='LS_FREIGHT',
+        right_on='BILL_NUMBER',
+        how='left'
+    )
 
-            # Check if Owner Ops
-            is_owner_ops = power_unit in set(owner_ops_fuel_df['VEHICLE_NO'])
+    # Merge with the combined ISAAC Fuel Report
+    merged_df = merged_df.merge(
+        isaac_combined_fuel_df,
+        left_on='LS_POWER_UNIT',
+        right_on='VEHICLE_NO',
+        how='left'
+    )
+    merged_df.drop(columns=['VEHICLE_NO'], inplace=True, errors='ignore')
 
-            # Calculate individual metrics (BEFORE formatting)
-            total_charge = power_unit_data['TOTAL_CHARGE_CAD'].sum()
-            bill_distance = power_unit_data['Bill Distance (miles)'].sum()
-            revenue_per_mile = total_charge / bill_distance if bill_distance > 0 else 0
-            driver_pay = power_unit_data['Driver Pay (CAD)'].sum()
-            fuel_cost = power_unit_data['FUEL_QUANTITY_L'].sum() * fuel_cost_multiplier if 'FUEL_QUANTITY_L' in power_unit_data else 0
-            lease_cost_total = lease_cost if is_owner_ops else 0
-            profit = total_charge - driver_pay - lease_cost_total - fuel_cost
+    # Extract the month and year from the dataset
+    merged_df['LS_ACTUAL_DATE'] = pd.to_datetime(merged_df['LS_ACTUAL_DATE'], errors='coerce')
+    if not merged_df['LS_ACTUAL_DATE'].isna().all():
+        # Get the month and year from the data
+        month_name = merged_df['LS_ACTUAL_DATE'].dt.month_name().iloc[0]
+        year = merged_df['LS_ACTUAL_DATE'].dt.year.iloc[0]
+        month_year_title = f"{month_name} {year}"
+    else:
+        month_year_title = "Unknown Month"
 
-            # Append to all_totals (including all calculated metrics)
-            all_totals.append({
-                "Power Unit": power_unit,
-                "Type": "Owner Ops" if is_owner_ops else "Company Truck",
-                "Total Charge (CAD)": total_charge,
-                "Bill Distance (miles)": bill_distance,
-                "Revenue per Mile": revenue_per_mile,
-                "Driver Pay (CAD)": driver_pay,
-                "Lease Cost": lease_cost_total,
-                "Fuel Cost": fuel_cost,
-                "Profit (CAD)": profit,
+        # Add currency conversion for charges (if applicable)
+        exchange_rate = 1.38  # Example USD to CAD conversion rate
+    
+        # Ensure CHARGES and XCHARGES are numeric, replacing invalid entries with NaN
+        merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce')
+        merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce')
+    
+        # Set 'CALLNAME' (Customer) to None if there is no BILL_NUMBER
+        merged_df['CALLNAME'] = np.where(
+            merged_df['BILL_NUMBER'].notna(),  # Only retain Customer if BILL_NUMBER exists
+            merged_df['CALLNAME'],
+            None  # Set to None otherwise
+        )
+    
+        # Calculate TOTAL_CHARGE_CAD based on CURRENCY_CODE
+        merged_df['TOTAL_CHARGE_CAD'] = np.where(
+            merged_df['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
+            (merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)) * exchange_rate,  # Convert to CAD
+            merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)  # Use original values if not USD
+        )
+    
+        # Ensure LS_LEG_DIST and DISTANCE are numeric
+        merged_df['LS_LEG_DIST'] = pd.to_numeric(merged_df['LS_LEG_DIST'], errors='coerce')  # Leg Distance
+        merged_df['DISTANCE'] = pd.to_numeric(merged_df['DISTANCE'], errors='coerce')  # Bill Distance
+    
+        # Adjust DISTANCE based on DISTANCE_UNITS (convert KM to miles if applicable)
+        merged_df['Bill Distance (miles)'] = np.where(
+            merged_df['DISTANCE_UNITS'] == 'KM',
+            merged_df['DISTANCE'] * 0.62,  # Convert KM to miles
+            merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
+        )
+    
+        # Ensure LS_LEG_DIST is positive or assign NaN for invalid values
+        merged_df['LS_LEG_DIST'] = np.where(merged_df['LS_LEG_DIST'] > 0, merged_df['LS_LEG_DIST'], np.nan)
+    
+        # Calculate Revenue per Mile based on Bill Distance
+        merged_df['Revenue per Mile'] = np.where(
+            pd.notna(merged_df['TOTAL_CHARGE_CAD']) & pd.notna(merged_df['Bill Distance (miles)']) & (merged_df['Bill Distance (miles)'] > 0),
+            merged_df['TOTAL_CHARGE_CAD'] / merged_df['Bill Distance (miles)'],  # Revenue per mile calculation
+            np.nan  # Assign NaN if Bill Distance is missing or zero
+        )
+    
+        # Ensure Driver Pay (CAD) is only assigned when there is a BILL_NUMBER
+        merged_df['Driver Pay (CAD)'] = np.where(
+            pd.notna(merged_df['LS_FREIGHT']),  # Check if BILL_NUMBER exists
+            merged_df['TOTAL_PAY_SUM'].fillna(0),  # Use TOTAL_PAY_SUM if BILL_NUMBER exists
+            0  # Otherwise, set Driver Pay to 0
+        )
+    
+        # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
+        merged_df['Profit (CAD)'] = np.where(
+            pd.notna(merged_df['TOTAL_CHARGE_CAD']),
+            merged_df['TOTAL_CHARGE_CAD'] - merged_df['TOTAL_PAY_SUM'].fillna(0),  # Calculate Profit
+            np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
+        )
+    
+        # Identify locations missing in the coordinates dataset
+        missing_origins = merged_df[
+            pd.isna(merged_df['LEGO_LAT']) | pd.isna(merged_df['LEGO_LON'])
+        ][['LEGO_ZONE_DESC']].drop_duplicates().rename(columns={'LEGO_ZONE_DESC': 'Location'})
+    
+        missing_destinations = merged_df[
+            pd.isna(merged_df['LEGD_LAT']) | pd.isna(merged_df['LEGD_LON'])
+        ][['LEGD_ZONE_DESC']].drop_duplicates().rename(columns={'LEGD_ZONE_DESC': 'Location'})
+    
+        missing_locations = pd.concat([missing_origins, missing_destinations]).drop_duplicates()
+    
+        # Fill missing Straight Distance as np.nan for rows missing coordinates
+        merged_df['Straight Distance'] = np.where(
+            pd.isna(merged_df['LEGO_LAT']) | pd.isna(merged_df['LEGD_LAT']),
+            np.nan,
+            calculate_haversine(merged_df)
+        )
+    
+        # Convert LS_POWER_UNIT to string for consistency
+        merged_df['LS_POWER_UNIT'] = merged_df['LS_POWER_UNIT'].astype(str)
+        
+        # Power Unit selection
+        punit_options = sorted(merged_df['LS_POWER_UNIT'].unique())
+        selected_punit = st.selectbox("Select Power Unit:", options=punit_options)
+        
+        # Filter data for the selected Power Unit
+        filtered_view = merged_df[merged_df['LS_POWER_UNIT'] == selected_punit].copy()
+        
+        # Driver selection (optional)
+        relevant_drivers = filtered_view['LS_DRIVER'].dropna().unique()
+        driver_options = ["All"] + sorted(relevant_drivers.astype(str))
+        selected_driver = st.selectbox("Select Driver ID (optional):", options=driver_options)
+        
+        if selected_driver != "All":
+            filtered_view = filtered_view[filtered_view['LS_DRIVER'] == selected_driver].copy()
+        
+        # Date Range Filtering
+        st.write("### Select Date Range:")
+        min_date = filtered_view['LS_ACTUAL_DATE'].min().date()
+        max_date = filtered_view['LS_ACTUAL_DATE'].max().date()
+        start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
+        end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+        
+        # Filter by selected date range
+        filtered_view = filtered_view[
+            (filtered_view['LS_ACTUAL_DATE'].dt.date >= start_date) &
+            (filtered_view['LS_ACTUAL_DATE'].dt.date <= end_date)
+        ].copy()
+        
+        if filtered_view.empty:
+            st.warning("No data available for the selected criteria.")
+        else:
+            # Deduplicate rows based on 'LS_POWER_UNIT', 'Route', and 'LS_ACTUAL_DATE'
+            filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
+            filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+        
+            # Filter by selected date range
+            filtered_view = filtered_view[
+                (filtered_view['LS_ACTUAL_DATE'].dt.date >= start_date) &
+                (filtered_view['LS_ACTUAL_DATE'].dt.date <= end_date)
+            ].copy()
+            
+            if filtered_view.empty:
+                st.warning("No data available for the selected criteria.")
+            else:
+                # Deduplicate rows based on 'LS_POWER_UNIT', 'Route', and 'LS_ACTUAL_DATE'
+                filtered_view['Route'] = filtered_view['LEGO_ZONE_DESC'] + " to " + filtered_view['LEGD_ZONE_DESC']
+                filtered_view = filtered_view.drop_duplicates(subset=['LS_POWER_UNIT', 'Route', 'LS_ACTUAL_DATE'], keep='first')
+                
+                # Sort by LS_ACTUAL_DATE (primary) and LS_LEG_SEQ (secondary)
+                filtered_view = filtered_view.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+                
+                # Assign colors for alternating rows by day
+                filtered_view['Day_Group'] = filtered_view['LS_ACTUAL_DATE'].dt.date
+                unique_days = list(filtered_view['Day_Group'].unique())
+                day_colors = {day: idx % 2 for idx, day in enumerate(unique_days)}
+                filtered_view['Highlight'] = filtered_view['Day_Group'].map(day_colors)
+                
+                # Add calculated fields
+                filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['TOTAL_PAY_SUM']
+                filtered_view['Revenue per Mile'] = np.where(
+                    pd.notna(filtered_view['Bill Distance (miles)']) & (filtered_view['Bill Distance (miles)'] > 0),
+                    filtered_view['TOTAL_CHARGE_CAD'] / filtered_view['Bill Distance (miles)'],
+                    np.nan
+                )
+            
+                # Create the route summary DataFrame
+                route_summary_df = filtered_view[
+                    [
+                        "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
+                        "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                    ]
+                ].rename(columns={
+                    "LS_FREIGHT": "BILL_NUMBER",
+                    "CALLNAME": "Customer",
+                    "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
+                    "LS_LEG_DIST": "Leg Distance (miles)",
+                    "Bill Distance (miles)": "Bill Distance (miles)"
+                })
+        
+            # Add calculated fields
+            filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['Driver Pay (CAD)']
+            filtered_view['Revenue per Mile'] = np.where(
+                pd.notna(filtered_view['Bill Distance (miles)']) & (filtered_view['Bill Distance (miles)'] > 0),
+                filtered_view['TOTAL_CHARGE_CAD'] / filtered_view['Bill Distance (miles)'],
+                np.nan
+            )
+            
+            # Create the route summary DataFrame
+            route_summary_df = filtered_view[
+                [
+                    "Route", "LS_FROM_ZONE", "LS_TO_ZONE", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", 
+                    "Bill Distance (miles)", "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", 
+                    "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                ]
+            ].rename(columns={
+                "LS_FROM_ZONE": "From Zone",
+                "LS_TO_ZONE": "To Zone",
+                "LS_FREIGHT": "BILL_NUMBER",
+                "CALLNAME": "Customer",
+                "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
+                "LS_LEG_DIST": "Leg Distance (miles)",
+                "Bill Distance (miles)": "Bill Distance (miles)"
             })
+            
+    with st.expander("All Grand Totals"):
+        if 'route_summary_df' in locals() and not route_summary_df.empty: #check if route_summary_df exists and is not empty
+            # Create a copy to avoid modifying the original DataFrame
+            grand_totals_df = route_summary_df.copy()
 
-        # Create DataFrame for all totals
-        all_totals_df = pd.DataFrame(all_totals)
+            # Remove formatting so we can do calculations
+            for col in ["Total Charge (CAD)", "Driver Pay (CAD)", "Profit (CAD)"]:
+                grand_totals_df[col] = grand_totals_df[col].astype(str).str.replace(r'[$,]', '', regex=True).astype(float) #added astype(str) to prevent errors
+            for col in ["Bill Distance (miles)", "Leg Distance (miles)"]:
+                grand_totals_df[col] = grand_totals_df[col].astype(str).str.replace(r'[$,]', '', regex=True).astype(float) #added astype(str) to prevent errors
+            if "Lease Cost" in grand_totals_df.columns:
+                grand_totals_df["Lease Cost"] = grand_totals_df["Lease Cost"].astype(str).str.replace(r'[$,]', '', regex=True).astype(float) #added astype(str) to prevent errors
+            if "Fuel Cost" in grand_totals_df.columns:
+                grand_totals_df["Fuel Cost"] = grand_totals_df["Fuel Cost"].astype(str).str.replace(r'[$,]', '', regex=True).astype(float) #added astype(str) to prevent errors
 
-        # Calculate grand totals (using the numeric DataFrame)
-        grand_total_row = {
-            "Power Unit": "Grand Totals",
-            "Type": "",
-            "Total Charge (CAD)": all_totals_df["Total Charge (CAD)"].sum(),
-            "Bill Distance (miles)": all_totals_df["Bill Distance (miles)"].sum(),
-            "Revenue per Mile": all_totals_df["Total Charge (CAD)"].sum() / all_totals_df["Bill Distance (miles)"].sum() if all_totals_df["Bill Distance (miles)"].sum() > 0 else 0,
-            "Driver Pay (CAD)": all_totals_df["Driver Pay (CAD)"].sum(),
-            "Lease Cost": all_totals_df["Lease Cost"].sum(),
-            "Fuel Cost": all_totals_df["Fuel Cost"].sum(),
-            "Profit (CAD)": all_totals_df["Profit (CAD)"].sum(),
-        }
+            # Calculate grand totals using .sum() directly on the numeric DataFrame
+            grand_total_row = {
+                "Route": "Grand Totals",
+                "Customer": "",
+                "Total Charge (CAD)": grand_totals_df["Total Charge (CAD)"].sum(),
+                "Bill Distance (miles)": grand_totals_df["Bill Distance (miles)"].sum(),
+                "Leg Distance (miles)": grand_totals_df["Leg Distance (miles)"].sum(),
+                "Driver Pay (CAD)": grand_totals_df["Driver Pay (CAD)"].sum(),
+                "Profit (CAD)": grand_totals_df["Profit (CAD)"].sum(),
+                "Date": "",
+            }
 
-        # Append grand total row to DataFrame
-        all_totals_df = pd.concat([all_totals_df, pd.DataFrame([grand_total_row])], ignore_index=True)
+            if "Lease Cost" in grand_totals_df.columns:
+                grand_total_row["Lease Cost"] = grand_totals_df["Lease Cost"].sum()
+            if "Fuel Cost" in grand_totals_df.columns:
+                grand_total_row["Fuel Cost"] = grand_totals_df["Fuel Cost"].sum()
+            
 
-        # Format numeric columns for display (AFTER calculations)
-        formatted_totals_df = all_totals_df.copy()
-        for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Lease Cost", "Fuel Cost", "Profit (CAD)"]:
-            formatted_totals_df[col] = formatted_totals_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
-        for col in ["Bill Distance (miles)"]:
-            formatted_totals_df[col] = formatted_totals_df[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+            grand_totals_df = pd.concat([grand_totals_df, pd.DataFrame([grand_total_row])], ignore_index=True)
 
+            # Format the entire DataFrame AFTER calculations
+            formatted_grand_totals_df = grand_totals_df.copy()
+            for col in ["Total Charge (CAD)", "Driver Pay (CAD)", "Profit (CAD)"]:
+                formatted_grand_totals_df[col] = formatted_grand_totals_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+            for col in ["Bill Distance (miles)", "Leg Distance (miles)"]:
+                formatted_grand_totals_df[col] = formatted_grand_totals_df[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+            if "Lease Cost" in formatted_grand_totals_df.columns:
+                formatted_grand_totals_df["Lease Cost"] = formatted_grand_totals_df["Lease Cost"].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
+            if "Fuel Cost" in formatted_grand_totals_df.columns:
+                formatted_grand_totals_df["Fuel Cost"] = formatted_grand_totals_df[col].apply(lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x)
 
-        # Rename columns for display (This part was correct)
-        formatted_totals_df.rename(columns={
-            "Power Unit": "Power Unit",
-            "Type": "Type",
-            "Total Charge (CAD)": "Total Charge (CAD)",
-            "Bill Distance (miles)": "Bill Distance (miles)",
-            "Revenue per Mile": "Revenue per Mile",
-            "Driver Pay (CAD)": "Driver Pay (CAD)",
-            "Lease Cost": "Lease Cost",
-            "Fuel Cost": "Fuel Cost",
-            "Profit (CAD)": "Profit (CAD)",
-        }, inplace=True)
-
-        # Display the table
-        st.write("Summary of All Power Units with Grand Totals:")
-        st.dataframe(formatted_totals_df, use_container_width=True)
+            st.write("Grand Totals:")
+            st.dataframe(formatted_grand_totals_df, use_container_width=True)
+        else:
+            st.write("No data to display Grand Totals. Please upload and process the data first.")
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
