@@ -488,7 +488,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             "LS_LEG_DIST": "Leg Distance (miles)",
             "Bill Distance (miles)": "Bill Distance (miles)"
         })
-        
+
+        # Check if each power unit is in the Owner Ops report
+        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
+        merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
+    
         # Add fixed lease cost only for Owner Operators
         lease_cost = 3100  # Fixed lease cost in CAD
         merged_df['Lease Cost'] = np.where(merged_df['Is Owner Operator'], lease_cost, 0)  # Apply lease cost conditionally
