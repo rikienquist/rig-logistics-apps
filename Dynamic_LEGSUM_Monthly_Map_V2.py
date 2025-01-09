@@ -149,7 +149,16 @@ def load_and_preprocess_data(uploaded_legsum_file, uploaded_tlorder_driverpay_fi
     # Load city coordinates
     city_coordinates_df = load_city_coordinates()
     
-    # Preprocess LEGSUM and TLORDER+DRIVERPAY
+    # Check if required files are uploaded
+    if uploaded_legsum_file is None:
+        st.error("LEGSUM file not uploaded. Please upload a valid LEGSUM CSV file.")
+        st.stop()  # Stop further execution if the file is not provided
+    
+    if city_coordinates_df is None:
+        st.error("City coordinates data not available. Please check the location_coordinates.csv file.")
+        st.stop()  # Stop execution if city coordinates are unavailable
+    
+    # Preprocess the LEGSUM file
     legsum_df = preprocess_legsum(uploaded_legsum_file, city_coordinates_df)
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
     
