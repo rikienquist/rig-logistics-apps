@@ -777,7 +777,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
-        # Group data by LS_POWER_UNIT
+        # Group data by LS_POWER_UNIT and calculate aggregated metrics
         power_unit_totals = merged_df.groupby('LS_POWER_UNIT').apply(
             lambda group: pd.Series({
                 'Type': 'Owner Ops' if group['Is Owner Operator'].iloc[0] else 'Company Truck',
@@ -789,36 +789,33 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 ),
                 'Driver Pay (CAD)': group['Driver Pay (CAD)'].sum(),
                 'Lease Cost': 3100 if group['Is Owner Operator'].iloc[0] else 0,
-                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,  # Multiply fuel by cost per liter
+                'Fuel Cost': group['FUEL_QUANTITY_L'].sum() * 1.45,  # Calculate Fuel Cost
                 'Profit (CAD)': (
                     group['TOTAL_CHARGE_CAD'].sum()
                     - group['Driver Pay (CAD)'].sum()
                     - (3100 if group['Is Owner Operator'].iloc[0] else 0)
-                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)
+                    - (group['FUEL_QUANTITY_L'].sum() * 1.45)  # Deduct accurate Fuel Cost
                 )
             })
         ).reset_index()
 
-        # Format numeric columns for display
-        for col in ['Total Charge (CAD)', 'Bill Distance (miles)', 'Revenue per Mile', 
-                    'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
+        # Formatting numeric columns for display
+        numeric_columns = [
+            'Total Charge (CAD)', 'Bill Distance (miles)', 'Revenue per Mile',
+            'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
+        ]
+        for col in numeric_columns:
             power_unit_totals[col] = power_unit_totals[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
 
-        # Rename columns for display
+        # Rename columns for better readability
         power_unit_totals.rename(columns={
             'LS_POWER_UNIT': 'Power Unit',
-            'Total Charge (CAD)': 'Total Charge (CAD)',
-            'Bill Distance (miles)': 'Bill Distance (miles)',
-            'Revenue per Mile': 'Revenue per Mile',
-            'Driver Pay (CAD)': 'Driver Pay (CAD)',
-            'Lease Cost': 'Lease Cost',
-            'Fuel Cost': 'Fuel Cost',
-            'Profit (CAD)': 'Profit (CAD)'
+            'Type': 'Type (Owner Ops or Company Truck)',
         }, inplace=True)
 
-        # Display the table
+        # Display the "All Grand Totals" table
         st.write("### Summary of Grand Totals for All Power Units")
         st.dataframe(power_unit_totals, use_container_width=True)
         
