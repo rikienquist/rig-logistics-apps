@@ -842,8 +842,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("Summary of All Power Units:")
         st.dataframe(formatted_totals, use_container_width=True)
-else:
-    st.warning("Please upload all required files to see the All Grand Totals section.")
         
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
