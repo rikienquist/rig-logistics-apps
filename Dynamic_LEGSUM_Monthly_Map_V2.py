@@ -869,8 +869,5 @@ with st.expander("All Grand Totals"):
         st.write("Grand Totals for All Power Units:")
         st.dataframe(all_grand_totals, use_container_width=True)
 
-    else:
-        st.warning("Please upload all required files to view the grand totals.")
-
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
