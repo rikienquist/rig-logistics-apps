@@ -273,8 +273,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
     tlorder_driverpay_df = preprocess_tlorder_driverpay(uploaded_tlorder_driverpay_file)
     
     # Preprocess both ISAAC Fuel Reports
-    owner_ops_fuel_df = preprocess_new_isaac_fuel(uploaded_owner_ops_fuel_file)
-    company_trucks_fuel_df = preprocess_new_isaac_fuel(uploaded_company_trucks_fuel_file)
+    owner_ops_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file)
+    company_trucks_fuel_df = preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
 
     # Combine the two ISAAC Fuel Reports
     isaac_combined_fuel_df = pd.concat([owner_ops_fuel_df, company_trucks_fuel_df], ignore_index=True)
