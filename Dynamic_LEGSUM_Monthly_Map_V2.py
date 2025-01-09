@@ -48,16 +48,6 @@ uploaded_tlorder_driverpay_file = st.file_uploader("Upload Pre-Merged TLORDER + 
 uploaded_isaac_owner_ops_file = st.file_uploader("Upload ISAAC Owner Ops Fuel Report (Excel file)", type="xlsx")
 uploaded_isaac_company_trucks_file = st.file_uploader("Upload ISAAC Company Trucks Fuel Report (Excel file)", type="xlsx")
 
-# Preprocess the ISAAC reports if both are uploaded
-if uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
-    isaac_owner_ops_df = preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file)
-    isaac_company_trucks_df = preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
-
-    # Combine the two reports into a single DataFrame
-    isaac_combined_fuel_df = pd.concat([isaac_owner_ops_df, isaac_company_trucks_df], ignore_index=True)
-else:
-    isaac_combined_fuel_df = None
-
 @st.cache_data
 def load_city_coordinates():
     city_coords = pd.read_csv("trip_map_data/location_coordinates.csv")
@@ -129,6 +119,16 @@ def preprocess_new_isaac_fuel(file):
     })
 
     return fuel_aggregated
+
+# Preprocess the ISAAC reports if both are uploaded
+if uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
+    isaac_owner_ops_df = preprocess_new_isaac_fuel(uploaded_isaac_owner_ops_file)
+    isaac_company_trucks_df = preprocess_new_isaac_fuel(uploaded_isaac_company_trucks_file)
+
+    # Combine the two reports into a single DataFrame
+    isaac_combined_fuel_df = pd.concat([isaac_owner_ops_df, isaac_company_trucks_df], ignore_index=True)
+else:
+    isaac_combined_fuel_df = None
 
 @st.cache_data
 def calculate_haversine(df):
