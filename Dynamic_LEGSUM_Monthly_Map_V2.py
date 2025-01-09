@@ -155,7 +155,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     else:
         isaac_combined_fuel_df = None
 
-
     # Merge TLORDER+DRIVERPAY data into LEGSUM on BILL_NUMBER
     merged_df = legsum_df.merge(
         tlorder_driverpay_df,
@@ -179,91 +178,91 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file:
     merged_df['ORIGPROV'] = merged_df['ORIGPROV']  # Use ORIGPROV from TLORDER
     merged_df['DESTPROV'] = merged_df['DESTPROV']  # Use DESTPROV from TLORDER
 
-    st.header("Power Unit Finder")
+    with st.expander("Power Unit Finder"):
 
-    # Dropdown for Customer (CALLNAME) - no "All" option
-    callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
-    selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
-
-    # Filter data for selected customer
-    filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
-
-    # Dropdowns for Origin and Destination Provinces
-    origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
-    destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
-
-    selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
-    selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
-
-    # Add Start Date and End Date filtering with unique keys
-    st.write("### Select Date Range:")
-    if not filtered_data.empty:
-        min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
-        max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+        # Dropdown for Customer (CALLNAME) - no "All" option
+        callname_options = sorted(merged_df['CALLNAME'].dropna().unique())
+        selected_callname = st.selectbox("Select Customer (CALLNAME):", options=callname_options)
     
-        # Use unique keys for each date_input
-        start_date = st.date_input(
-            "Start Date", 
-            value=min_date, 
-            min_value=min_date, 
-            max_value=max_date, 
-            key=f"start_date_{selected_callname}"
-        )
-        end_date = st.date_input(
-            "End Date", 
-            value=max_date, 
-            min_value=min_date, 
-            max_value=max_date, 
-            key=f"end_date_{selected_callname}"
-        )
+        # Filter data for selected customer
+        filtered_data = merged_df[merged_df['CALLNAME'] == selected_callname]
     
-        # Apply date range filter
-        filtered_data = filtered_data[
-            (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
-            (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
-        ]
-
-    # Handle combined ORIGPROV and DESTPROV filtering
-    if selected_origprov != "All" or selected_destprov != "All":
-        # Identify BILL_NUMBERs satisfying the selected ORIGPROV or DESTPROV
-        valid_bills = filtered_data[
-            ((filtered_data['ORIGPROV'] == selected_origprov) | (selected_origprov == "All")) &
-            ((filtered_data['DESTPROV'] == selected_destprov) | (selected_destprov == "All"))
-        ]['BILL_NUMBER'].unique()
-
-        # Filter the original dataset to include all legs for these BILL_NUMBERs
-        filtered_data = filtered_data[filtered_data['BILL_NUMBER'].isin(valid_bills)]
-
-    if filtered_data.empty:
-        st.warning("No results found for the selected criteria.")
-    else:
-        # Group data by BILL_NUMBER and display separate tables for each
-        grouped = filtered_data.groupby('BILL_NUMBER')
-        for bill_number, group in grouped:
-            # Get the overall ORIGPROV -> DESTPROV for the BILL_NUMBER
-            bill_origprov = group['ORIGPROV'].iloc[0]
-            bill_destprov = group['DESTPROV'].iloc[0]
-
-            # Display the BILL_NUMBER and its ORIGPROV -> DESTPROV
-            st.write(f"### Bill Number: {bill_number} ({bill_origprov} to {bill_destprov})")
-
-            # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
-            group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
-
-            # Create a table showing movements for the bill number
-            bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
-                columns={
-                    'LS_POWER_UNIT': 'Power Unit',
-                    'LEGO_ZONE_DESC': 'Origin',
-                    'LEGD_ZONE_DESC': 'Destination',
-                    'LS_LEG_SEQ': 'Sequence',
-                    'LS_ACTUAL_DATE': 'Date'
-                }
+        # Dropdowns for Origin and Destination Provinces
+        origprov_options = ["All"] + sorted(filtered_data['ORIGPROV'].dropna().unique())
+        destprov_options = ["All"] + sorted(filtered_data['DESTPROV'].dropna().unique())
+    
+        selected_origprov = st.selectbox("Select Origin Province (ORIGPROV):", options=origprov_options)
+        selected_destprov = st.selectbox("Select Destination Province (DESTPROV):", options=destprov_options)
+    
+        # Add Start Date and End Date filtering with unique keys
+        st.write("### Select Date Range:")
+        if not filtered_data.empty:
+            min_date = filtered_data['LS_ACTUAL_DATE'].min().date()
+            max_date = filtered_data['LS_ACTUAL_DATE'].max().date()
+        
+            # Use unique keys for each date_input
+            start_date = st.date_input(
+                "Start Date", 
+                value=min_date, 
+                min_value=min_date, 
+                max_value=max_date, 
+                key=f"start_date_{selected_callname}"
             )
-            bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
-
-            # Display the table for this bill number
-            st.write(bill_table)
+            end_date = st.date_input(
+                "End Date", 
+                value=max_date, 
+                min_value=min_date, 
+                max_value=max_date, 
+                key=f"end_date_{selected_callname}"
+            )
+        
+            # Apply date range filter
+            filtered_data = filtered_data[
+                (filtered_data['LS_ACTUAL_DATE'].dt.date >= start_date) &
+                (filtered_data['LS_ACTUAL_DATE'].dt.date <= end_date)
+            ]
+    
+        # Handle combined ORIGPROV and DESTPROV filtering
+        if selected_origprov != "All" or selected_destprov != "All":
+            # Identify BILL_NUMBERs satisfying the selected ORIGPROV or DESTPROV
+            valid_bills = filtered_data[
+                ((filtered_data['ORIGPROV'] == selected_origprov) | (selected_origprov == "All")) &
+                ((filtered_data['DESTPROV'] == selected_destprov) | (selected_destprov == "All"))
+            ]['BILL_NUMBER'].unique()
+    
+            # Filter the original dataset to include all legs for these BILL_NUMBERs
+            filtered_data = filtered_data[filtered_data['BILL_NUMBER'].isin(valid_bills)]
+    
+        if filtered_data.empty:
+            st.warning("No results found for the selected criteria.")
+        else:
+            # Group data by BILL_NUMBER and display separate tables for each
+            grouped = filtered_data.groupby('BILL_NUMBER')
+            for bill_number, group in grouped:
+                # Get the overall ORIGPROV -> DESTPROV for the BILL_NUMBER
+                bill_origprov = group['ORIGPROV'].iloc[0]
+                bill_destprov = group['DESTPROV'].iloc[0]
+    
+                # Display the BILL_NUMBER and its ORIGPROV -> DESTPROV
+                st.write(f"### Bill Number: {bill_number} ({bill_origprov} to {bill_destprov})")
+    
+                # Sort by LS_ACTUAL_DATE and LS_LEG_SEQ
+                group = group.sort_values(by=['LS_ACTUAL_DATE', 'LS_LEG_SEQ'])
+    
+                # Create a table showing movements for the bill number
+                bill_table = group[['LS_POWER_UNIT', 'LEGO_ZONE_DESC', 'LEGD_ZONE_DESC', 'LS_LEG_SEQ', 'LS_ACTUAL_DATE']].rename(
+                    columns={
+                        'LS_POWER_UNIT': 'Power Unit',
+                        'LEGO_ZONE_DESC': 'Origin',
+                        'LEGD_ZONE_DESC': 'Destination',
+                        'LS_LEG_SEQ': 'Sequence',
+                        'LS_ACTUAL_DATE': 'Date'
+                    }
+                )
+                bill_table['Date'] = bill_table['Date'].dt.date  # Format date for display
+    
+                # Display the table for this bill number
+                st.write(bill_table)
 
 
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
