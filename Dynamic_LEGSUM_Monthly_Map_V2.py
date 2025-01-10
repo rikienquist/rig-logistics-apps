@@ -789,8 +789,16 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
+        # Filter out invalid rows (e.g., negative or NaN TOTAL_CHARGE_CAD or Bill Distance)
+        filtered_merged_df = merged_df[
+            (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Valid Total Charge
+            (merged_df['Bill Distance (miles)'].notna()) &  # Valid Bill Distance
+            (merged_df['Bill Distance (miles)'] >= 0) &  # Non-negative Bill Distance
+            (merged_df['FUEL_QUANTITY_L'].notna())  # Valid Fuel Quantity
+        ]
+
         # Group by LS_POWER_UNIT to calculate totals
-        all_grand_totals = merged_df.groupby('LS_POWER_UNIT').agg({
+        all_grand_totals = filtered_merged_df.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
             'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
             'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
@@ -805,7 +813,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             lambda unit: lease_cost if unit in owner_ops_units else 0
         )
         all_grand_totals['Fuel Cost'] = all_grand_totals['FUEL_QUANTITY_L'] * fuel_cost_multiplier
-        all_grand_totals['Revenue per Mile'] = all_grand_totals['TOTAL_CHARGE_CAD'] / all_grand_totals['Bill Distance (miles)']
+        all_grand_totals['Revenue per Mile'] = all_grand_totals.apply(
+            lambda row: row['TOTAL_CHARGE_CAD'] / row['Bill Distance (miles)'] 
+            if row['Bill Distance (miles)'] > 0 else 0,
+            axis=1
+        )
         all_grand_totals['Profit (CAD)'] = (
             all_grand_totals['TOTAL_CHARGE_CAD']
             - all_grand_totals['TOTAL_PAY_SUM']
