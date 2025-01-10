@@ -816,12 +816,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
         ]
 
-        # Drop exact duplicate rows to prevent double-counting
+        # **Remove the drop_duplicates step**, which may exclude valid rows:
+        # Drop duplicates only if all fields match, including BILL_NUMBER and LS_ACTUAL_DATE
         valid_rows = valid_rows.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
+            'LS_POWER_UNIT', 'BILL_NUMBER', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
         ])
 
-        # Debugging: Focus on rows contributing to Power Unit 5032
+        # Debugging: Validate rows contributing to Power Unit 5032
         unit_5032_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '5032']
         st.write("Rows Contributing to Unit 5032 (Debugging):")
         st.dataframe(unit_5032_rows)
@@ -887,7 +888,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
-
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
