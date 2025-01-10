@@ -802,10 +802,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Set lease cost for Owner Ops
         lease_cost = 3100  # Fixed lease cost in CAD
 
-        # Calculate Fuel Cost per unit
+        # Calculate Fuel Cost per unit (already aggregated in the data)
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
-        fuel_cost_per_unit = merged_df.groupby('LS_POWER_UNIT')['FUEL_QUANTITY_L'].sum().reset_index()
+        fuel_cost_per_unit = isaac_combined_fuel_df.groupby('VEHICLE_NO').agg({'FUEL_QUANTITY_L': 'sum'}).reset_index()
         fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
+        fuel_cost_per_unit = fuel_cost_per_unit.rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT'})[['LS_POWER_UNIT', 'Fuel Cost']]
 
         # Filter valid rows (aligning with Route Summary logic)
         valid_rows = merged_df[
@@ -827,9 +828,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
         }).reset_index()
 
-        # Merge with fuel cost per unit
+        # Merge with fuel cost per unit (fuel cost already summed per unit)
         all_grand_totals = all_grand_totals.merge(
-            fuel_cost_per_unit[['LS_POWER_UNIT', 'Fuel Cost']], on='LS_POWER_UNIT', how='left'
+            fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
         ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
 
         # Add calculated fields
