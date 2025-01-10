@@ -817,13 +817,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Drop exact duplicate rows to prevent double-counting
         valid_rows = valid_rows.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM', 'FUEL_QUANTITY_L'
+            'LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
         ])
-
-        # Debugging: Validate rows contributing to Power Unit 471 calculations
-        unit_471_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '471']
-        st.write("Rows Contributing to Unit 471 After Removing Duplicates and Filtering (Debugging):")
-        st.dataframe(unit_471_rows)
 
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
@@ -867,11 +862,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
 
-        # Debugging: Inspect intermediate calculations
-        st.write("All Grand Totals After Deduplication and Filtering (Debugging):")
-        st.dataframe(all_grand_totals)
-
-        # Format numeric columns
+        # Format numeric columns for display
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
@@ -880,7 +871,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
-
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
