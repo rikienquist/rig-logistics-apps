@@ -785,12 +785,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Set lease cost for Owner Ops
         lease_cost = 3100  # Fixed lease cost in CAD
 
-        # Calculate Fuel Cost for the month per power unit
+        # Calculate Fuel Cost per unit
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
-        fuel_cost_per_unit = (
-            isaac_combined_fuel_df.groupby('VEHICLE_NO')['FUEL_QUANTITY_L']
-            .sum() * fuel_cost_multiplier
-        ).reset_index().rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT', 'FUEL_QUANTITY_L': 'Fuel Cost'})
+        fuel_cost_per_unit = merged_df.groupby('LS_POWER_UNIT')['FUEL_QUANTITY_L'].sum().reset_index()
+        fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
 
         # Filter valid rows (aligning with Route Summary logic)
         valid_rows = merged_df[
@@ -799,9 +797,14 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['Bill Distance (miles)'].notna())  # Non-NaN Bill Distance
         ]
 
-        # Debugging: Show rows contributing to 471 calculations
+        # Drop exact duplicate rows to prevent double-counting
+        valid_rows = valid_rows.drop_duplicates(subset=[
+            'LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM', 'FUEL_QUANTITY_L'
+        ])
+
+        # Debugging: Validate rows contributing to Power Unit 471 calculations
         unit_471_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '471']
-        st.write("Rows Contributing to Unit 471 (Debugging):")
+        st.write("Rows Contributing to Unit 471 After Removing Duplicates (Debugging):")
         st.dataframe(unit_471_rows)
 
         # Group by LS_POWER_UNIT for calculations
@@ -813,7 +816,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Merge with fuel cost per unit
         all_grand_totals = all_grand_totals.merge(
-            fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
+            fuel_cost_per_unit[['LS_POWER_UNIT', 'Fuel Cost']], on='LS_POWER_UNIT', how='left'
         ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
 
         # Add calculated fields
@@ -846,11 +849,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
 
-        # Debugging: Show intermediate calculations
-        st.write("Intermediate Grand Totals (Debugging):")
+        # Debugging: Inspect intermediate calculations
+        st.write("All Grand Totals After Deduplication (Debugging):")
         st.dataframe(all_grand_totals)
 
-        # Format numeric columns for display
+        # Format numeric columns
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
@@ -859,6 +862,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
+
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
