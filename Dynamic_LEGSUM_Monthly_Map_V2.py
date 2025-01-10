@@ -794,7 +794,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         valid_rows = merged_df[
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
             (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
-            (merged_df['Bill Distance (miles)'].notna())  # Non-NaN Bill Distance
+            (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
+            (merged_df['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
         ]
 
         # Drop exact duplicate rows to prevent double-counting
@@ -804,7 +805,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Debugging: Validate rows contributing to Power Unit 471 calculations
         unit_471_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '471']
-        st.write("Rows Contributing to Unit 471 After Removing Duplicates (Debugging):")
+        st.write("Rows Contributing to Unit 471 After Removing Duplicates and Filtering (Debugging):")
         st.dataframe(unit_471_rows)
 
         # Group by LS_POWER_UNIT for calculations
@@ -850,7 +851,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         })
 
         # Debugging: Inspect intermediate calculations
-        st.write("All Grand Totals After Deduplication (Debugging):")
+        st.write("All Grand Totals After Deduplication and Filtering (Debugging):")
         st.dataframe(all_grand_totals)
 
         # Format numeric columns
@@ -862,6 +863,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
+
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
