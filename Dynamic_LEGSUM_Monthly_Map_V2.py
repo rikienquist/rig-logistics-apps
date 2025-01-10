@@ -816,16 +816,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
         ]
 
-        # **Remove the drop_duplicates step**, which may exclude valid rows:
-        # Drop duplicates only if all fields match, including BILL_NUMBER and LS_ACTUAL_DATE
+        # Remove exact duplicate rows only if all fields match, including BILL_NUMBER and LS_ACTUAL_DATE
         valid_rows = valid_rows.drop_duplicates(subset=[
             'LS_POWER_UNIT', 'BILL_NUMBER', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
         ])
-
-        # Debugging: Validate rows contributing to Power Unit 5032
-        unit_5032_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '5032']
-        st.write("Rows Contributing to Unit 5032 (Debugging):")
-        st.dataframe(unit_5032_rows)
 
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
@@ -838,11 +832,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         all_grand_totals = all_grand_totals.merge(
             fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
         ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
-
-        # Debugging: Check intermediate totals for unit 5032
-        unit_5032_totals = all_grand_totals[all_grand_totals['LS_POWER_UNIT'] == '5032']
-        st.write("Intermediate Totals for Unit 5032 (Debugging):")
-        st.dataframe(unit_5032_totals)
 
         # Add calculated fields
         all_grand_totals['Type'] = all_grand_totals['LS_POWER_UNIT'].apply(
@@ -873,11 +862,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'Bill Distance (miles)': 'Bill Distance (miles)',
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
-
-        # Debugging: Validate unit 5032 in final table
-        unit_5032_final = all_grand_totals_display[all_grand_totals_display['Power Unit'] == '5032']
-        st.write("Final Grand Totals for Unit 5032 (Debugging):")
-        st.dataframe(unit_5032_final)
 
         # Format numeric columns for display
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
