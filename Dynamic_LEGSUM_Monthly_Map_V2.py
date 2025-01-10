@@ -795,10 +795,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Filter valid rows (aligning with Route Summary logic)
         valid_rows = merged_df[
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
-            (merged_df['TOTAL_CHARGE_CAD'] != 0) &  # Non-zero Total Charge
             (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
-            (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['Bill Distance (miles)'] >= 0)  # Non-negative Bill Distance
+            (merged_df['Bill Distance (miles)'].notna())  # Non-NaN Bill Distance
         ]
 
         # Debugging: Show rows contributing to 471 calculations
@@ -808,7 +806,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
-            'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
+            'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD), retain correct signs
             'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
             'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
         }).reset_index()
