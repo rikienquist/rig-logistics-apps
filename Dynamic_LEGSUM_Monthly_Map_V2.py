@@ -778,7 +778,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
 
-        # Identify if each power unit is an Owner Operator
+        # Check if each power unit is in the Owner Ops report
         owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
         merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
         
@@ -789,23 +789,28 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         
-        # Filter out invalid rows (e.g., negative or NaN TOTAL_CHARGE_CAD or Bill Distance)
+        # Filter out invalid rows
         filtered_merged_df = merged_df[
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Valid Total Charge
             (merged_df['Bill Distance (miles)'].notna()) &  # Valid Bill Distance
             (merged_df['Bill Distance (miles)'] >= 0) &  # Non-negative Bill Distance
             (merged_df['FUEL_QUANTITY_L'].notna())  # Valid Fuel Quantity
         ]
-
-        # Group by LS_POWER_UNIT to calculate totals
+        
+        # Debugging: Print unit-specific data
+        unit_471_data = filtered_merged_df[filtered_merged_df['LS_POWER_UNIT'] == '471']
+        st.write("Filtered Data for Unit 471:")
+        st.dataframe(unit_471_data)
+        
+        # Group by LS_POWER_UNIT
         all_grand_totals = filtered_merged_df.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
             'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
             'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
             'FUEL_QUANTITY_L': 'sum'  # Fuel quantity for Fuel Cost calculation
         }).reset_index()
-
-        # Add columns for calculated values
+        
+        # Add calculated fields
         all_grand_totals['Type'] = all_grand_totals['LS_POWER_UNIT'].apply(
             lambda unit: "Owner Ops" if unit in owner_ops_units else "Company Truck"
         )
@@ -824,7 +829,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             - all_grand_totals['Lease Cost']
             - all_grand_totals['Fuel Cost']
         )
-
+        
         # Format the table for display
         all_grand_totals_display = all_grand_totals[[
             'LS_POWER_UNIT', 'Type', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)',
@@ -835,13 +840,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'Bill Distance (miles)': 'Bill Distance (miles)',
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
-
+        
+        # Debugging: Print all_grand_totals for validation
+        st.write("All Grand Totals Debugging Table:")
+        st.dataframe(all_grand_totals)
+        
         # Format numeric columns
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
             )
-
+        
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
