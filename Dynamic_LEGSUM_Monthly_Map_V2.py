@@ -821,6 +821,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
         ])
 
+        # Debugging: Focus on rows contributing to Power Unit 5032
+        unit_5032_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '5032']
+        st.write("Rows Contributing to Unit 5032 (Debugging):")
+        st.dataframe(unit_5032_rows)
+
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD), retain correct signs
@@ -832,6 +837,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         all_grand_totals = all_grand_totals.merge(
             fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
         ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
+
+        # Debugging: Check intermediate totals for unit 5032
+        unit_5032_totals = all_grand_totals[all_grand_totals['LS_POWER_UNIT'] == '5032']
+        st.write("Intermediate Totals for Unit 5032 (Debugging):")
+        st.dataframe(unit_5032_totals)
 
         # Add calculated fields
         all_grand_totals['Type'] = all_grand_totals['LS_POWER_UNIT'].apply(
@@ -863,6 +873,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
 
+        # Debugging: Validate unit 5032 in final table
+        unit_5032_final = all_grand_totals_display[all_grand_totals_display['Power Unit'] == '5032']
+        st.write("Final Grand Totals for Unit 5032 (Debugging):")
+        st.dataframe(unit_5032_final)
+
         # Format numeric columns for display
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
@@ -872,6 +887,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
+
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
