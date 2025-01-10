@@ -785,13 +785,13 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Set lease cost for Owner Ops
         lease_cost = 3100  # Fixed lease cost in CAD
 
-        # Calculate Fuel Cost once per power unit
+        # Calculate Fuel Cost for the month per power unit
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         fuel_cost_per_unit = (
             isaac_combined_fuel_df.groupby('VEHICLE_NO')['FUEL_QUANTITY_L']
             .sum() * fuel_cost_multiplier
-        ).reset_index().rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT', 0: 'Fuel Cost'})
-        
+        ).reset_index().rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT', 'FUEL_QUANTITY_L': 'Fuel Cost'})
+
         # Filter out invalid rows
         filtered_merged_df = merged_df[
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Valid Total Charge
