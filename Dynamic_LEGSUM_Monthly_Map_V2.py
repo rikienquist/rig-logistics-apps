@@ -775,6 +775,64 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 st.write("### Locations Missing Coordinates")
                 st.dataframe(missing_locations, use_container_width=True)
 
+if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
+    with st.expander("All Grand Totals"):
+
+        # Identify if each power unit is an Owner Operator
+        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
+        merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
+        
+        # Set lease cost for Owner Ops
+        lease_cost = 3100  # Fixed lease cost in CAD
+        
+        # Calculate Fuel Cost
+        fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
+        merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
+        
+        # Group by LS_POWER_UNIT to calculate totals
+        all_grand_totals = merged_df.groupby('LS_POWER_UNIT').agg({
+            'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
+            'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
+            'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
+            'FUEL_QUANTITY_L': 'sum'  # Fuel quantity for Fuel Cost calculation
+        }).reset_index()
+
+        # Add columns for calculated values
+        all_grand_totals['Type'] = all_grand_totals['LS_POWER_UNIT'].apply(
+            lambda unit: "Owner Ops" if unit in owner_ops_units else "Company Truck"
+        )
+        all_grand_totals['Lease Cost'] = all_grand_totals['LS_POWER_UNIT'].apply(
+            lambda unit: lease_cost if unit in owner_ops_units else 0
+        )
+        all_grand_totals['Fuel Cost'] = all_grand_totals['FUEL_QUANTITY_L'] * fuel_cost_multiplier
+        all_grand_totals['Revenue per Mile'] = all_grand_totals['TOTAL_CHARGE_CAD'] / all_grand_totals['Bill Distance (miles)']
+        all_grand_totals['Profit (CAD)'] = (
+            all_grand_totals['TOTAL_CHARGE_CAD']
+            - all_grand_totals['TOTAL_PAY_SUM']
+            - all_grand_totals['Lease Cost']
+            - all_grand_totals['Fuel Cost']
+        )
+
+        # Format the table for display
+        all_grand_totals_display = all_grand_totals[[
+            'LS_POWER_UNIT', 'Type', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)',
+            'Revenue per Mile', 'TOTAL_PAY_SUM', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
+        ]].rename(columns={
+            'LS_POWER_UNIT': 'Power Unit',
+            'TOTAL_CHARGE_CAD': 'Total Charge (CAD)',
+            'Bill Distance (miles)': 'Bill Distance (miles)',
+            'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
+        })
+
+        # Format numeric columns
+        for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
+            all_grand_totals_display[col] = all_grand_totals_display[col].apply(
+                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+            )
+
+        # Display the table
+        st.write("This table contains grand totals for all power units:")
+        st.dataframe(all_grand_totals_display, use_container_width=True)
 
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
