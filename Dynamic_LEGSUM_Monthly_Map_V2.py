@@ -802,29 +802,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Set lease cost for Owner Ops
         lease_cost = 3100  # Fixed lease cost in CAD
 
-        # Aggregate charges, distances, and driver pay at the BILL_NUMBER level
-        aggregated_bills = merged_df.groupby('BILL_NUMBER').agg({
-            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges per BILL_NUMBER
-            'DISTANCE': 'sum',  # Sum Distances per BILL_NUMBER
-            'TOTAL_PAY_SUM': 'sum',  # Sum Driver Pay per BILL_NUMBER
-            'DISTANCE_UNITS': 'first'  # Retain Distance Unit for conversion
-        }).reset_index()
-
-        # Convert DISTANCE to miles where applicable
-        aggregated_bills['Bill Distance (miles)'] = np.where(
-            aggregated_bills['DISTANCE_UNITS'] == 'KM',
-            aggregated_bills['DISTANCE'] * 0.62,  # Convert KM to miles
-            aggregated_bills['DISTANCE']  # Use as-is if already in miles
-        )
-
-        # Merge aggregated BILL_NUMBER data back into the main DataFrame
-        merged_df = merged_df.drop(['TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_SUM', 'Bill Distance (miles)'], axis=1, errors='ignore')
-        merged_df = merged_df.merge(
-            aggregated_bills[['BILL_NUMBER', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']],
-            on='BILL_NUMBER',
-            how='left'
-        )
-
         # Calculate Fuel Cost per unit (already aggregated in the data)
         fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
         fuel_cost_per_unit = isaac_combined_fuel_df.groupby('VEHICLE_NO').agg({'FUEL_QUANTITY_L': 'sum'}).reset_index()
@@ -896,6 +873,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
 
-
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
+    
