@@ -321,12 +321,23 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             None  # Set to None otherwise
         )
     
-        # Calculate TOTAL_CHARGE_CAD based on CURRENCY_CODE
-        merged_df['TOTAL_CHARGE_CAD'] = np.where(
-            merged_df['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
-            (merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)) * exchange_rate,  # Convert to CAD
-            merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)  # Use original values if not USD
+        # First, aggregate charges by BILL_NUMBER
+        aggregated_charges = merged_df.groupby('BILL_NUMBER').agg({
+            'CHARGES': 'sum',  # Sum CHARGES per BILL_NUMBER
+            'XCHARGES': 'sum',  # Sum XCHARGES per BILL_NUMBER
+            'CURRENCY_CODE': 'first'  # Retain the first currency code per BILL_NUMBER
+        }).reset_index()
+        
+        # Apply currency conversion to aggregated charges
+        aggregated_charges['TOTAL_CHARGE_CAD'] = np.where(
+            aggregated_charges['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
+            (aggregated_charges['CHARGES'].fillna(0) + aggregated_charges['XCHARGES'].fillna(0)) * exchange_rate,  # Convert to CAD
+            aggregated_charges['CHARGES'].fillna(0) + aggregated_charges['XCHARGES'].fillna(0)  # Use original values if not USD
         )
+        
+        # Merge the aggregated charges back into the main DataFrame
+        merged_df = merged_df.drop(['CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'TOTAL_CHARGE_CAD'], axis=1, errors='ignore')
+        merged_df = merged_df.merge(aggregated_charges[['BILL_NUMBER', 'TOTAL_CHARGE_CAD']], on='BILL_NUMBER', how='left')
     
         # Ensure LS_LEG_DIST and DISTANCE are numeric
         merged_df['LS_LEG_DIST'] = pd.to_numeric(merged_df['LS_LEG_DIST'], errors='coerce')  # Leg Distance
