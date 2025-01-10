@@ -794,13 +794,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Filter out invalid rows
         filtered_merged_df = merged_df[
-            (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Valid Total Charge
-            (merged_df['Bill Distance (miles)'].notna()) &  # Valid Bill Distance
-            (merged_df['Bill Distance (miles)'] >= 0) &  # Non-negative Bill Distance
+            (merged_df['TOTAL_CHARGE_CAD'].notna()) & (merged_df['TOTAL_CHARGE_CAD'] != 0) &  # Valid Total Charge
+            (merged_df['Bill Distance (miles)'].notna()) & (merged_df['Bill Distance (miles)'] >= 0) &  # Valid Bill Distance
             (merged_df['TOTAL_PAY_SUM'].notna())  # Valid Driver Pay
         ]
 
-        # Ensure proper aggregation without counting invalid rows
+        # Deduplicate rows to avoid double-counting
         filtered_merged_df = filtered_merged_df.drop_duplicates(subset=[
             'LS_POWER_UNIT', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
         ])
