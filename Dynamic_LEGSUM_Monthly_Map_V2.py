@@ -792,20 +792,22 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             .sum() * fuel_cost_multiplier
         ).reset_index().rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT', 'FUEL_QUANTITY_L': 'Fuel Cost'})
 
-        # Filter out invalid rows
-        filtered_merged_df = merged_df[
-            (merged_df['TOTAL_CHARGE_CAD'].notna()) & (merged_df['TOTAL_CHARGE_CAD'] != 0) &  # Valid Total Charge
-            (merged_df['Bill Distance (miles)'].notna()) & (merged_df['Bill Distance (miles)'] >= 0) &  # Valid Bill Distance
-            (merged_df['TOTAL_PAY_SUM'].notna())  # Valid Driver Pay
+        # Filter valid rows (aligning with Route Summary logic)
+        valid_rows = merged_df[
+            (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
+            (merged_df['TOTAL_CHARGE_CAD'] != 0) &  # Non-zero Total Charge
+            (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
+            (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
+            (merged_df['Bill Distance (miles)'] >= 0)  # Non-negative Bill Distance
         ]
 
-        # Deduplicate rows to avoid double-counting
-        filtered_merged_df = filtered_merged_df.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
-        ])
+        # Debugging: Show rows contributing to 471 calculations
+        unit_471_rows = valid_rows[valid_rows['LS_POWER_UNIT'] == '471']
+        st.write("Rows Contributing to Unit 471 (Debugging):")
+        st.dataframe(unit_471_rows)
 
         # Group by LS_POWER_UNIT for calculations
-        all_grand_totals = filtered_merged_df.groupby('LS_POWER_UNIT').agg({
+        all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
             'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
             'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
@@ -846,8 +848,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
 
-        # Debugging: Print all_grand_totals for validation
-        st.write("All Grand Totals Debugging Table:")
+        # Debugging: Show intermediate calculations
+        st.write("Intermediate Grand Totals (Debugging):")
         st.dataframe(all_grand_totals)
 
         # Format numeric columns for display
