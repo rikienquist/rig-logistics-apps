@@ -800,6 +800,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['TOTAL_PAY_SUM'].notna())  # Valid Driver Pay
         ]
 
+        # Ensure proper aggregation without counting invalid rows
+        filtered_merged_df = filtered_merged_df.drop_duplicates(subset=[
+            'LS_POWER_UNIT', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
+        ])
+
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = filtered_merged_df.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD)
