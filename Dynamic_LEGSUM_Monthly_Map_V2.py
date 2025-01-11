@@ -864,6 +864,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         })
 
         # Format numeric columns for display
+        all_grand_totals_display['Bill Distance (miles)'] = all_grand_totals_display['Bill Distance (miles)'].apply(
+            lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+        )
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
                 lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
