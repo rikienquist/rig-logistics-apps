@@ -839,18 +839,27 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         fuel_cost_per_unit = fuel_cost_per_unit.rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT'})[['LS_POWER_UNIT', 'Fuel Cost']]
 
-        # Filter valid rows (aligning with Route Summary logic)
+        # Filter valid rows, ensuring all BILL_NUMBER-related rows are included
         valid_rows = merged_df[
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
             (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
             (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
-        ]
-
-        # Remove exact duplicate rows only if all fields match, including BILL_NUMBER and LS_ACTUAL_DATE
-        valid_rows = valid_rows.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'BILL_NUMBER', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
-        ])
+            (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
+        ].copy()
+        
+        # Group by LS_POWER_UNIT and aggregate relevant fields, summing only at the BILL_NUMBER level
+        power_unit_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
+            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge for each BILL_NUMBER
+            'Bill Distance (miles)': 'first',  # Take the unique distance for each BILL_NUMBER
+            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay for each BILL_NUMBER
+        }).reset_index()
+        
+        # Summing aggregated values across each power unit
+        all_grand_totals = power_unit_aggregates.groupby('LS_POWER_UNIT').agg({
+            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all BILL_NUMBERs per power unit
+            'Bill Distance (miles)': 'sum',  # Sum distances for all BILL_NUMBERs per power unit
+            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all BILL_NUMBERs per power unit
+        }).reset_index()
 
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
