@@ -826,45 +826,45 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_owner_ops_file and uploaded_isaac_company_trucks_file:
     with st.expander("All Grand Totals"):
 
-        # Check if each power unit is in the Owner Ops report
-        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
-        merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
+        # Owner Ops determination
+        owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])
+        lease_cost = 3100  # Fixed lease cost for Owner Ops
+        fuel_cost_multiplier = 1.45
 
-        # Set lease cost for Owner Ops
-        lease_cost = 3100  # Fixed lease cost in CAD
+        # Unified filtering logic (same as Route Summary)
+        valid_rows = merged_df[
+            (merged_df['TOTAL_CHARGE_CAD'].notna()) &
+            (merged_df['LS_POWER_UNIT'].notna()) &
+            (merged_df['Bill Distance (miles)'].notna()) &
+            (merged_df['BILL_NUMBER'].notna())
+        ].copy()
 
-        # Calculate Fuel Cost per unit (already aggregated in the data)
-        fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
+        # Deduplicate BILL_NUMBER to prevent double-counting
+        valid_rows = valid_rows.drop_duplicates(subset=['BILL_NUMBER'])
+
+        # Aggregate at BILL_NUMBER level
+        bill_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
+            'TOTAL_CHARGE_CAD': 'sum',
+            'Bill Distance (miles)': 'sum',
+            'TOTAL_PAY_SUM': 'sum'
+        }).reset_index()
+
+        # Aggregate at Power Unit level
+        power_unit_aggregates = bill_aggregates.groupby('LS_POWER_UNIT').agg({
+            'TOTAL_CHARGE_CAD': 'sum',
+            'Bill Distance (miles)': 'sum',
+            'TOTAL_PAY_SUM': 'sum'
+        }).reset_index()
+
+        # Fuel cost aggregation
         fuel_cost_per_unit = isaac_combined_fuel_df.groupby('VEHICLE_NO').agg({'FUEL_QUANTITY_L': 'sum'}).reset_index()
         fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         fuel_cost_per_unit = fuel_cost_per_unit.rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT'})[['LS_POWER_UNIT', 'Fuel Cost']]
 
-        # Filter valid rows based on Route Summary logic
-        valid_rows = merged_df[
-            (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
-            (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
-            (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
-        ].copy()
-
-        # Avoid duplicate rows by grouping at the BILL_NUMBER level first
-        bill_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
-            'TOTAL_CHARGE_CAD': 'first',  # Unique charge for each BILL_NUMBER
-            'Bill Distance (miles)': 'first',  # Unique distance for each BILL_NUMBER
-            'TOTAL_PAY_SUM': 'first'  # Unique driver pay for each BILL_NUMBER
-        }).reset_index()
-
-        # Sum the aggregated BILL_NUMBER values for each power unit
-        power_unit_aggregates = bill_aggregates.groupby('LS_POWER_UNIT').agg({
-            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges per power unit
-            'Bill Distance (miles)': 'sum',  # Sum distances per power unit
-            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay per power unit
-        }).reset_index()
-
-        # Merge with fuel cost per unit (fuel cost already summed per unit)
+        # Merge fuel cost into aggregates
         all_grand_totals = power_unit_aggregates.merge(
             fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
-        ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
+        ).fillna({'Fuel Cost': 0})
 
         # Add calculated fields
         all_grand_totals['Type'] = all_grand_totals['LS_POWER_UNIT'].apply(
@@ -885,28 +885,12 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             - all_grand_totals['Fuel Cost']
         )
 
-        # Re-calculate totals at the Route Summary level for consistency
-        recalculated_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
-            'TOTAL_CHARGE_CAD': 'sum',
-            'Bill Distance (miles)': 'sum',
-            'TOTAL_PAY_SUM': 'sum'
-        }).reset_index()
+        # Debugging Comparison
+        st.write("Debugging Totals Comparison:")
+        st.write("Route Summary Totals:", valid_rows.groupby('LS_POWER_UNIT')[['TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']].sum())
+        st.write("All Grand Totals Calculation:", all_grand_totals[['LS_POWER_UNIT', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']])
 
-        # Ensure alignment of recalculated totals and grand totals
-        for unit in all_grand_totals['LS_POWER_UNIT']:
-            recalculated = recalculated_totals[recalculated_totals['LS_POWER_UNIT'] == unit]
-            if not recalculated.empty:
-                all_grand_totals.loc[
-                    all_grand_totals['LS_POWER_UNIT'] == unit, 'TOTAL_CHARGE_CAD'
-                ] = recalculated['TOTAL_CHARGE_CAD'].values[0]
-                all_grand_totals.loc[
-                    all_grand_totals['LS_POWER_UNIT'] == unit, 'Bill Distance (miles)'
-                ] = recalculated['Bill Distance (miles)'].values[0]
-                all_grand_totals.loc[
-                    all_grand_totals['LS_POWER_UNIT'] == unit, 'TOTAL_PAY_SUM'
-                ] = recalculated['TOTAL_PAY_SUM'].values[0]
-
-        # Format the table for display
+        # Format and display the final table
         all_grand_totals_display = all_grand_totals[[
             'LS_POWER_UNIT', 'Type', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)',
             'Revenue per Mile', 'TOTAL_PAY_SUM', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)'
@@ -918,15 +902,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         })
 
         # Format numeric columns for display
-        all_grand_totals_display['Bill Distance (miles)'] = all_grand_totals_display['Bill Distance (miles)'].apply(
-            lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x
-        )
         for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
-                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+                lambda x: f"${x:,.2f}" if pd.notna(x) else x
             )
-
-        # Display the table
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
 
