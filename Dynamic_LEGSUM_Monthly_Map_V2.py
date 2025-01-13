@@ -844,26 +844,25 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
             (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
             (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['BILL_NUMBER'].notna()) &  # Ensure BILL_NUMBER exists
-            (merged_df['LS_ACTUAL_DATE'].notna())  # Ensure valid actual date for time-based grouping
+            (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
         ].copy()
 
-        # Group by LS_POWER_UNIT and BILL_NUMBER to aggregate unique values per BILL_NUMBER
-        power_unit_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
-            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge for each BILL_NUMBER
-            'Bill Distance (miles)': 'first',  # Take the unique distance for each BILL_NUMBER
-            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay for each BILL_NUMBER
+        # Aggregate at the BILL_NUMBER level first to avoid duplicate summing
+        bill_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
+            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge per BILL_NUMBER
+            'Bill Distance (miles)': 'first',  # Take the unique distance per BILL_NUMBER
+            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay per BILL_NUMBER
         }).reset_index()
 
         # Summing aggregated values across each power unit
-        all_grand_totals = power_unit_aggregates.groupby('LS_POWER_UNIT').agg({
+        power_unit_aggregates = bill_aggregates.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all BILL_NUMBERs per power unit
             'Bill Distance (miles)': 'sum',  # Sum distances for all BILL_NUMBERs per power unit
             'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all BILL_NUMBERs per power unit
         }).reset_index()
 
         # Merge with fuel cost per unit (fuel cost already summed per unit)
-        all_grand_totals = all_grand_totals.merge(
+        all_grand_totals = power_unit_aggregates.merge(
             fuel_cost_per_unit, on='LS_POWER_UNIT', how='left'
         ).fillna({'Fuel Cost': 0})  # Ensure Fuel Cost is 0 for missing units
 
