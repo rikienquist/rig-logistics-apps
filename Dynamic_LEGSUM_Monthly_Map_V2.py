@@ -844,8 +844,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
             (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
             (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['BILL_NUMBER'].notna()) &  # Ensure BILL_NUMBER exists
-            (merged_df['LS_ACTUAL_DATE'].notna())  # Ensure valid actual date
+            (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
         ].copy()
 
         # Ensure no duplicates in the valid rows (to avoid double counting)
@@ -855,9 +854,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
         # Group by LS_POWER_UNIT and BILL_NUMBER to aggregate unique values per BILL_NUMBER
         power_unit_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
-            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge for each BILL_NUMBER
-            'Bill Distance (miles)': 'first',  # Take the unique distance for each BILL_NUMBER
-            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay for each BILL_NUMBER
+            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all rows per BILL_NUMBER
+            'Bill Distance (miles)': 'sum',  # Sum distances for all rows per BILL_NUMBER
+            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all rows per BILL_NUMBER
         }).reset_index()
 
         # Summing aggregated values across each power unit
