@@ -500,8 +500,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 # Handle duplicates: Ensure Total Charge, Bill Distance, and Driver Pay are only counted once per BILL_NUMBER and LS_POWER_UNIT
                 filtered_view['Is Duplicate'] = filtered_view.duplicated(subset=['LS_POWER_UNIT', 'BILL_NUMBER'], keep='first')
                 
-                # Set Total Charge, Bill Distance, and Driver Pay to 0 for duplicates within the same Power Unit
+                # Set Total Charge, Bill Distance, and Driver Pay (TOTAL_PAY_SUM) to 0 for duplicates within the same Power Unit
                 filtered_view.loc[filtered_view['Is Duplicate'], ['TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']] = 0
+                
+                # Recalculate Driver Pay (CAD) if it's derived from TOTAL_PAY_SUM
+                filtered_view['Driver Pay (CAD)'] = filtered_view['TOTAL_PAY_SUM']
                 
                 # Create the route summary DataFrame
                 route_summary_df = filtered_view[
