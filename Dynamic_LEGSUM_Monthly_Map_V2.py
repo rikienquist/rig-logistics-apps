@@ -337,8 +337,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)
         )
         
-        # Deduplicate merged_df at the BILL_NUMBER level to avoid inflated totals
-        deduplicated_df = merged_df.drop_duplicates(subset=['BILL_NUMBER'])
+        # Deduplicate at BILL_NUMBER and LS_ACTUAL_DATE level to avoid over-counting
+        deduplicated_df = merged_df.drop_duplicates(subset=['BILL_NUMBER', 'LS_ACTUAL_DATE', 'LS_POWER_UNIT'])
         
         # Aggregate charges, distance, and driver pay by BILL_NUMBER
         bill_aggregates = deduplicated_df.groupby('BILL_NUMBER').agg({
@@ -839,8 +839,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         fuel_cost_per_unit = fuel_cost_per_unit.rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT'})[['LS_POWER_UNIT', 'Fuel Cost']]
 
-        # Deduplicate rows at the BILL_NUMBER level to avoid inflated totals
-        deduplicated_rows = merged_df.drop_duplicates(subset=['BILL_NUMBER', 'LS_POWER_UNIT', 'LS_ACTUAL_DATE'])
+        # Deduplicate rows at the BILL_NUMBER, LS_POWER_UNIT, and LS_ACTUAL_DATE level to avoid over-counting
+        deduplicated_rows = merged_df.drop_duplicates(subset=['BILL_NUMBER', 'LS_ACTUAL_DATE', 'LS_POWER_UNIT'])
         
         # Filter valid rows (aligning with Route Summary logic)
         valid_rows = deduplicated_rows[
@@ -853,9 +853,15 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD), retain correct signs
-            'Bill Distance (miles)': 'sum',  # Bill Distance (miles)
-            'TOTAL_PAY_SUM': 'sum',  # Driver Pay (CAD)
+            'AGGREGATED_DISTANCE': 'sum',  # Use the aggregated distance (ensure proper field naming)
+            'AGGREGATED_PAY_SUM': 'sum',  # Use aggregated driver pay (ensure proper field naming)
         }).reset_index()
+        
+        # Rename columns for consistency
+        all_grand_totals.rename(columns={
+            'AGGREGATED_DISTANCE': 'Bill Distance (miles)',  # Rename to match display convention
+            'AGGREGATED_PAY_SUM': 'Driver Pay (CAD)'  # Rename for consistency
+        }, inplace=True)
 
         # Merge with fuel cost per unit (fuel cost already summed per unit)
         all_grand_totals = all_grand_totals.merge(
@@ -892,13 +898,27 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'Driver Pay (CAD)'
         })
 
+        # Ensure Bill Distance (miles) has 1 decimal place
+        all_grand_totals['Bill Distance (miles)'] = all_grand_totals['Bill Distance (miles)'].apply(
+            lambda x: round(x, 1) if pd.notna(x) else x
+        )
+        
+        # Ensure monetary fields have 2 decimal places
+        for col in ['TOTAL_CHARGE_CAD', 'Driver Pay (CAD)', 'Revenue per Mile', 'Profit (CAD)']:
+            all_grand_totals[col] = all_grand_totals[col].apply(
+                lambda x: round(x, 2) if pd.notna(x) else x
+            )
+        
+        # Prepare the display DataFrame with formatted columns
+        all_grand_totals_display = all_grand_totals.copy()
+        
         # Format numeric columns for display
         all_grand_totals_display['Bill Distance (miles)'] = all_grand_totals_display['Bill Distance (miles)'].apply(
-            lambda x: f"{x:,.1f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+            lambda x: f"{x:,.1f}" if pd.notna(x) else x
         )
-        for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
+        for col in ['TOTAL_CHARGE_CAD', 'Driver Pay (CAD)', 'Revenue per Mile', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
             all_grand_totals_display[col] = all_grand_totals_display[col].apply(
-                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
+                lambda x: f"${x:,.2f}" if pd.notna(x) else x
             )
 
         # Display the table
