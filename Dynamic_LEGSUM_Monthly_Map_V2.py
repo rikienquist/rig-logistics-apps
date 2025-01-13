@@ -326,11 +326,11 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         aggregated_data = merged_df.groupby('BILL_NUMBER').agg({
             'CHARGES': 'sum',  # Sum CHARGES per BILL_NUMBER
             'XCHARGES': 'sum',  # Sum XCHARGES per BILL_NUMBER
-            'DISTANCE': 'sum',  # Sum DISTANCE per BILL_NUMBER
-            'TOTAL_PAY_SUM': 'sum',  # Sum Driver Pay per BILL_NUMBER
+            'DISTANCE': 'max',  # Take the maximum distance per BILL_NUMBER
+            'TOTAL_PAY_SUM': 'max',  # Take the maximum driver pay per BILL_NUMBER
             'CURRENCY_CODE': 'first',  # Retain the first currency code per BILL_NUMBER
         }).reset_index()
-    
+        
         # Apply currency conversion to aggregated charges
         aggregated_data['TOTAL_CHARGE_CAD'] = np.where(
             aggregated_data['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
