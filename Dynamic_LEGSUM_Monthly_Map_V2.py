@@ -862,6 +862,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
         ].copy()
 
+        # DEBUG: Check rows contributing to calculations
+        st.write("Debugging: Valid Rows for Aggregation")
+        st.dataframe(valid_rows[['LS_POWER_UNIT', 'BILL_NUMBER', 'TOTAL_PAY_SUM', 'Driver Pay (CAD)']])
+
         # Group by LS_POWER_UNIT and aggregate relevant fields, summing only at the BILL_NUMBER level
         power_unit_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
             'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge for each BILL_NUMBER
@@ -869,12 +873,20 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay for each BILL_NUMBER
         }).reset_index()
 
+        # DEBUG: Check aggregates at the BILL_NUMBER level
+        st.write("Debugging: Aggregates at BILL_NUMBER Level")
+        st.dataframe(power_unit_aggregates[['LS_POWER_UNIT', 'BILL_NUMBER', 'TOTAL_PAY_SUM']])
+
         # Summing aggregated values across each power unit
         all_grand_totals = power_unit_aggregates.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all BILL_NUMBERs per power unit
             'Bill Distance (miles)': 'sum',  # Sum distances for all BILL_NUMBERs per power unit
             'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all BILL_NUMBERs per power unit
         }).reset_index()
+
+        # DEBUG: Check aggregates at the Power Unit level
+        st.write("Debugging: Aggregates at Power Unit Level")
+        st.dataframe(all_grand_totals[['LS_POWER_UNIT', 'TOTAL_PAY_SUM']])
 
         # Merge with fuel cost per unit (fuel cost already summed per unit)
         all_grand_totals = all_grand_totals.merge(
