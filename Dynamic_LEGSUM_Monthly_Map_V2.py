@@ -337,11 +337,14 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)
         )
         
-        # Group BILL_NUMBER to calculate aggregated values
-        bill_aggregates = merged_df.groupby('BILL_NUMBER').agg({
-            'ROW_TOTAL_CHARGE_CAD': 'sum',  # Total Charge
-            'DISTANCE': 'sum',  # Distance
-            'TOTAL_PAY_SUM': 'sum',  # Driver Pay
+        # Deduplicate merged_df at the BILL_NUMBER level to avoid inflated totals
+        deduplicated_df = merged_df.drop_duplicates(subset=['BILL_NUMBER'])
+        
+        # Aggregate charges, distance, and driver pay by BILL_NUMBER
+        bill_aggregates = deduplicated_df.groupby('BILL_NUMBER').agg({
+            'ROW_TOTAL_CHARGE_CAD': 'sum',  # Sum ROW_TOTAL_CHARGE_CAD per BILL_NUMBER
+            'DISTANCE': 'sum',  # Sum DISTANCE per BILL_NUMBER
+            'TOTAL_PAY_SUM': 'sum',  # Sum Driver Pay
         }).reset_index().rename(columns={
             'ROW_TOTAL_CHARGE_CAD': 'TOTAL_CHARGE_CAD',
             'DISTANCE': 'AGGREGATED_DISTANCE',
