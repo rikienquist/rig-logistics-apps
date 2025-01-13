@@ -497,19 +497,31 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                     np.nan
                 )
             
+                # Handle duplicates: Ensure Total Charge, Bill Distance, and Driver Pay are only counted once per BILL_NUMBER and LS_POWER_UNIT
+                filtered_view['Is Duplicate'] = filtered_view.duplicated(subset=['LS_POWER_UNIT', 'BILL_NUMBER'], keep='first')
+                
+                # Set Total Charge, Bill Distance, and Driver Pay to 0 for duplicates within the same Power Unit
+                filtered_view.loc[filtered_view['Is Duplicate'], ['TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM']] = 0
+                
                 # Create the route summary DataFrame
                 route_summary_df = filtered_view[
                     [
-                        "Route", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", "Bill Distance (miles)",
-                        "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                        "Route", "LS_FROM_ZONE", "LS_TO_ZONE", "LS_FREIGHT", "CALLNAME", "TOTAL_CHARGE_CAD", "LS_LEG_DIST", 
+                        "Bill Distance (miles)", "Revenue per Mile", "LS_DRIVER", "Driver Pay (CAD)", "Profit (CAD)", 
+                        "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
                     ]
                 ].rename(columns={
+                    "LS_FROM_ZONE": "From Zone",
+                    "LS_TO_ZONE": "To Zone",
                     "LS_FREIGHT": "BILL_NUMBER",
                     "CALLNAME": "Customer",
                     "TOTAL_CHARGE_CAD": "Total Charge (CAD)",
                     "LS_LEG_DIST": "Leg Distance (miles)",
                     "Bill Distance (miles)": "Bill Distance (miles)"
                 })
+                
+                # Drop the temporary 'Is Duplicate' column (optional)
+                filtered_view.drop(columns=['Is Duplicate'], inplace=True)
         
             # Add calculated fields
             filtered_view['Profit (CAD)'] = filtered_view['TOTAL_CHARGE_CAD'] - filtered_view['Driver Pay (CAD)']
