@@ -1,4 +1,4 @@
-### adding lease and fuel costs, grand total table in SECTIONS
+### fixing total charge and driver pay since they're 2-5x
 
 import pandas as pd
 import plotly.graph_objects as go
