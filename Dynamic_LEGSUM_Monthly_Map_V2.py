@@ -847,18 +847,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
         ].copy()
 
-        # Aggregate at the BILL_NUMBER level first to avoid duplicate summing
+        # Avoid duplicate rows by grouping at the BILL_NUMBER level first
         bill_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
-            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge per BILL_NUMBER
-            'Bill Distance (miles)': 'first',  # Take the unique distance per BILL_NUMBER
-            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay per BILL_NUMBER
+            'TOTAL_CHARGE_CAD': 'first',  # Unique charge for each BILL_NUMBER
+            'Bill Distance (miles)': 'first',  # Unique distance for each BILL_NUMBER
+            'TOTAL_PAY_SUM': 'first'  # Unique driver pay for each BILL_NUMBER
         }).reset_index()
 
-        # Summing aggregated values across each power unit
+        # Sum the aggregated BILL_NUMBER values for each power unit
         power_unit_aggregates = bill_aggregates.groupby('LS_POWER_UNIT').agg({
-            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all BILL_NUMBERs per power unit
-            'Bill Distance (miles)': 'sum',  # Sum distances for all BILL_NUMBERs per power unit
-            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all BILL_NUMBERs per power unit
+            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges per power unit
+            'Bill Distance (miles)': 'sum',  # Sum distances per power unit
+            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay per power unit
         }).reset_index()
 
         # Merge with fuel cost per unit (fuel cost already summed per unit)
@@ -884,6 +884,27 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             - all_grand_totals['Lease Cost']
             - all_grand_totals['Fuel Cost']
         )
+
+        # Re-calculate totals at the Route Summary level for consistency
+        recalculated_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
+            'TOTAL_CHARGE_CAD': 'sum',
+            'Bill Distance (miles)': 'sum',
+            'TOTAL_PAY_SUM': 'sum'
+        }).reset_index()
+
+        # Ensure alignment of recalculated totals and grand totals
+        for unit in all_grand_totals['LS_POWER_UNIT']:
+            recalculated = recalculated_totals[recalculated_totals['LS_POWER_UNIT'] == unit]
+            if not recalculated.empty:
+                all_grand_totals.loc[
+                    all_grand_totals['LS_POWER_UNIT'] == unit, 'TOTAL_CHARGE_CAD'
+                ] = recalculated['TOTAL_CHARGE_CAD'].values[0]
+                all_grand_totals.loc[
+                    all_grand_totals['LS_POWER_UNIT'] == unit, 'Bill Distance (miles)'
+                ] = recalculated['Bill Distance (miles)'].values[0]
+                all_grand_totals.loc[
+                    all_grand_totals['LS_POWER_UNIT'] == unit, 'TOTAL_PAY_SUM'
+                ] = recalculated['TOTAL_PAY_SUM'].values[0]
 
         # Format the table for display
         all_grand_totals_display = all_grand_totals[[
