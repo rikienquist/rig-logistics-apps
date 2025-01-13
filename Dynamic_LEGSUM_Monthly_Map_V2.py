@@ -338,9 +338,9 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             aggregated_data['CHARGES'].fillna(0) + aggregated_data['XCHARGES'].fillna(0)  # Use original values if not USD
         )
     
-        # Merge the aggregated data back into the main DataFrame
+        # Merge the aggregated data back into the main DataFrame without overwriting distinct rows
         merged_df = merged_df.drop(
-            ['CHARGES', 'XCHARGES', 'DISTANCE', 'TOTAL_PAY_SUM', 'CURRENCY_CODE', 'TOTAL_CHARGE_CAD'], 
+            ['CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'TOTAL_CHARGE_CAD'], 
             axis=1, errors='ignore'
         )
         merged_df = merged_df.merge(
@@ -348,12 +348,16 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             on='BILL_NUMBER', 
             how='left'
         )
+        
+        # Ensure DISTANCE is not overwritten for movements with unique rows
+        merged_df['DISTANCE'] = merged_df['DISTANCE_x'].fillna(merged_df['DISTANCE_y'])
+        merged_df.drop(columns=['DISTANCE_x', 'DISTANCE_y'], inplace=True, errors='ignore')
     
         # Adjust DISTANCE based on DISTANCE_UNITS (convert KM to miles if applicable)
         merged_df['Bill Distance (miles)'] = np.where(
             merged_df['DISTANCE_UNITS'] == 'KM',
-            merged_df['DISTANCE'] * 0.62,  # Convert aggregated DISTANCE from KM to miles
-            merged_df['DISTANCE']  # Use aggregated DISTANCE as-is if already in miles
+            merged_df['DISTANCE'] * 0.62,  # Convert DISTANCE from KM to miles
+            merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
         )
     
         # Ensure LS_LEG_DIST is positive or assign NaN for invalid values
