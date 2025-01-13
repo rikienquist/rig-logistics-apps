@@ -839,19 +839,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         fuel_cost_per_unit['Fuel Cost'] = fuel_cost_per_unit['FUEL_QUANTITY_L'] * fuel_cost_multiplier
         fuel_cost_per_unit = fuel_cost_per_unit.rename(columns={'VEHICLE_NO': 'LS_POWER_UNIT'})[['LS_POWER_UNIT', 'Fuel Cost']]
 
+        # Deduplicate rows at the BILL_NUMBER level to avoid inflated totals
+        deduplicated_rows = merged_df.drop_duplicates(subset=['BILL_NUMBER', 'LS_POWER_UNIT', 'LS_ACTUAL_DATE'])
+        
         # Filter valid rows (aligning with Route Summary logic)
-        valid_rows = merged_df[
-            (merged_df['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
-            (merged_df['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
-            (merged_df['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
-            (merged_df['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
+        valid_rows = deduplicated_rows[
+            (deduplicated_rows['TOTAL_CHARGE_CAD'].notna()) &  # Non-NaN Total Charge
+            (deduplicated_rows['LS_POWER_UNIT'].notna()) &  # Valid Power Unit
+            (deduplicated_rows['Bill Distance (miles)'].notna()) &  # Non-NaN Bill Distance
+            (deduplicated_rows['LS_FREIGHT'].notna())  # Ensure LS_FREIGHT exists (linked to a BILL_NUMBER)
         ]
-
-        # Remove exact duplicate rows only if all fields match, including BILL_NUMBER and LS_ACTUAL_DATE
-        valid_rows = valid_rows.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'BILL_NUMBER', 'LS_ACTUAL_DATE', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
-        ])
-
+        
         # Group by LS_POWER_UNIT for calculations
         all_grand_totals = valid_rows.groupby('LS_POWER_UNIT').agg({
             'TOTAL_CHARGE_CAD': 'sum',  # Total Charge (CAD), retain correct signs
