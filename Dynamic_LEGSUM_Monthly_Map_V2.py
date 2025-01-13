@@ -280,8 +280,7 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
     # Merge LEGSUM with TLORDER + DRIVERPAY
     merged_df = legsum_df.merge(
-        tlorder_driverpay_df[['BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'DISTANCE', 'DISTANCE_UNITS', 
-                              'CURRENCY_CODE', 'TOTAL_PAY_SUM']],
+        tlorder_driverpay_df,
         left_on='LS_FREIGHT',
         right_on='BILL_NUMBER',
         how='left'
@@ -323,66 +322,90 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             None  # Set to None otherwise
         )
     
-        # Aggregate charges, distance, and driver pay by BILL_NUMBER
-        aggregated_data = merged_df.groupby('BILL_NUMBER').agg({
-            'CHARGES': 'sum',  # Sum CHARGES per BILL_NUMBER
-            'XCHARGES': 'sum',  # Sum XCHARGES per BILL_NUMBER
-            'DISTANCE': 'max',  # Take the maximum distance per BILL_NUMBER
-            'TOTAL_PAY_SUM': 'max',  # Take the maximum driver pay per BILL_NUMBER
-            'CURRENCY_CODE': 'first',  # Retain the first currency code per BILL_NUMBER
-        }).reset_index()
+        # Add currency conversion for charges (if applicable)
+        exchange_rate = 1.38  # Example USD to CAD conversion rate
         
-        # Apply currency conversion to aggregated charges
-        aggregated_data['TOTAL_CHARGE_CAD'] = np.where(
-            aggregated_data['CURRENCY_CODE'] == 'USD',  # Check if currency is USD
-            (aggregated_data['CHARGES'].fillna(0) + aggregated_data['XCHARGES'].fillna(0)) * exchange_rate,  # Convert to CAD
-            aggregated_data['CHARGES'].fillna(0) + aggregated_data['XCHARGES'].fillna(0)  # Use original values if not USD
+        # Ensure CHARGES, XCHARGES, and DISTANCE are numeric
+        merged_df['CHARGES'] = pd.to_numeric(merged_df['CHARGES'], errors='coerce')
+        merged_df['XCHARGES'] = pd.to_numeric(merged_df['XCHARGES'], errors='coerce')
+        merged_df['DISTANCE'] = pd.to_numeric(merged_df['DISTANCE'], errors='coerce')
+        
+        # Calculate TOTAL_CHARGE_CAD at the row level
+        merged_df['ROW_TOTAL_CHARGE_CAD'] = np.where(
+            merged_df['CURRENCY_CODE'] == 'USD',
+            (merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)) * exchange_rate,
+            merged_df['CHARGES'].fillna(0) + merged_df['XCHARGES'].fillna(0)
         )
-    
-        # Merge the aggregated data back into the main DataFrame without overwriting distinct rows
-        merged_df = merged_df.drop(
-            ['CHARGES', 'XCHARGES', 'CURRENCY_CODE', 'TOTAL_CHARGE_CAD'], 
-            axis=1, errors='ignore'
-        )
+        
+        # Group BILL_NUMBER to calculate aggregated values
+        bill_aggregates = merged_df.groupby('BILL_NUMBER').agg({
+            'ROW_TOTAL_CHARGE_CAD': 'sum',  # Total Charge
+            'DISTANCE': 'sum',  # Distance
+            'TOTAL_PAY_SUM': 'sum',  # Driver Pay
+        }).reset_index().rename(columns={
+            'ROW_TOTAL_CHARGE_CAD': 'TOTAL_CHARGE_CAD',
+            'DISTANCE': 'AGGREGATED_DISTANCE',
+            'TOTAL_PAY_SUM': 'AGGREGATED_PAY_SUM'
+        })
+        
+        # Merge aggregated totals back into merged_df
         merged_df = merged_df.merge(
-            aggregated_data[['BILL_NUMBER', 'TOTAL_CHARGE_CAD', 'DISTANCE', 'TOTAL_PAY_SUM']], 
-            on='BILL_NUMBER', 
+            bill_aggregates[['BILL_NUMBER', 'TOTAL_CHARGE_CAD', 'AGGREGATED_DISTANCE', 'AGGREGATED_PAY_SUM']],
+            on='BILL_NUMBER',
             how='left'
         )
         
-        # Ensure DISTANCE is not overwritten for movements with unique rows
-        merged_df['DISTANCE'] = merged_df['DISTANCE_x'].fillna(merged_df['DISTANCE_y'])
-        merged_df.drop(columns=['DISTANCE_x', 'DISTANCE_y'], inplace=True, errors='ignore')
+        # Avoid overwriting original DISTANCE/Driver Pay columns; create aggregated fields
+        merged_df['Bill Distance (miles)'] = np.where(
+            merged_df['DISTANCE_UNITS'] == 'KM',
+            merged_df['AGGREGATED_DISTANCE'] * 0.62,  # Convert KM to miles
+            merged_df['AGGREGATED_DISTANCE']
+        )
+        
+        # Assign Driver Pay (CAD) from aggregated totals
+        merged_df['Driver Pay (CAD)'] = merged_df['AGGREGATED_PAY_SUM']
     
         # Adjust DISTANCE based on DISTANCE_UNITS (convert KM to miles if applicable)
         merged_df['Bill Distance (miles)'] = np.where(
             merged_df['DISTANCE_UNITS'] == 'KM',
-            merged_df['DISTANCE'] * 0.62,  # Convert DISTANCE from KM to miles
-            merged_df['DISTANCE']  # Use DISTANCE as-is if already in miles
+            merged_df['DISTANCE'] * 0.62,  # Convert aggregated DISTANCE from KM to miles
+            merged_df['DISTANCE']  # Use aggregated DISTANCE as-is if already in miles
         )
     
         # Ensure LS_LEG_DIST is positive or assign NaN for invalid values
-        merged_df['LS_LEG_DIST'] = np.where(merged_df['LS_LEG_DIST'] > 0, merged_df['LS_LEG_DIST'], np.nan)
-    
-        # Calculate Revenue per Mile based on Bill Distance
+        merged_df['LS_LEG_DIST'] = np.where(
+            merged_df['LS_LEG_DIST'] > 0, 
+            merged_df['LS_LEG_DIST'], 
+            np.nan  # Assign NaN if LS_LEG_DIST is invalid or negative
+        )
+        
+        # Calculate Revenue per Mile based on aggregated Bill Distance
         merged_df['Revenue per Mile'] = np.where(
-            pd.notna(merged_df['TOTAL_CHARGE_CAD']) & pd.notna(merged_df['Bill Distance (miles)']) & (merged_df['Bill Distance (miles)'] > 0),
+            pd.notna(merged_df['TOTAL_CHARGE_CAD']) & 
+            pd.notna(merged_df['Bill Distance (miles)']) & 
+            (merged_df['Bill Distance (miles)'] > 0),
             merged_df['TOTAL_CHARGE_CAD'] / merged_df['Bill Distance (miles)'],  # Revenue per mile calculation
             np.nan  # Assign NaN if Bill Distance is missing or zero
         )
-    
-        # Ensure Driver Pay (CAD) is assigned based on the aggregated TOTAL_PAY_SUM
+        
+        # Assign Driver Pay (CAD) based on AGGREGATED_PAY_SUM
         merged_df['Driver Pay (CAD)'] = np.where(
-            pd.notna(merged_df['LS_FREIGHT']),  # Check if BILL_NUMBER exists
-            merged_df['TOTAL_PAY_SUM'].fillna(0),  # Use aggregated TOTAL_PAY_SUM if BILL_NUMBER exists
-            0  # Otherwise, set Driver Pay to 0
+            pd.notna(merged_df['BILL_NUMBER']),  # Only assign if BILL_NUMBER exists
+            merged_df['AGGREGATED_PAY_SUM'].fillna(0),  # Use aggregated TOTAL_PAY_SUM for valid BILL_NUMBERs
+            0  # Otherwise, assign 0
         )
-    
-        # Calculate Profit (CAD) only if TOTAL_CHARGE_CAD is available
+        
+        # Calculate Profit (CAD) based on aggregated values
         merged_df['Profit (CAD)'] = np.where(
-            pd.notna(merged_df['TOTAL_CHARGE_CAD']),
-            merged_df['TOTAL_CHARGE_CAD'] - merged_df['Driver Pay (CAD)'],  # Calculate Profit
-            np.nan  # Assign NaN if TOTAL_CHARGE_CAD is missing
+            pd.notna(merged_df['TOTAL_CHARGE_CAD']) & 
+            pd.notna(merged_df['Driver Pay (CAD)']),
+            merged_df['TOTAL_CHARGE_CAD'] - merged_df['Driver Pay (CAD)'],  # Profit = Total Charge - Driver Pay
+            np.nan  # Assign NaN if TOTAL_CHARGE_CAD or Driver Pay is missing
+        )
+        
+        # Format the Bill Distance (miles) to 1 decimal place for consistency
+        merged_df['Bill Distance (miles)'] = merged_df['Bill Distance (miles)'].apply(
+            lambda x: round(x, 1) if pd.notna(x) else np.nan
         )
     
         # Identify locations missing in the coordinates dataset
