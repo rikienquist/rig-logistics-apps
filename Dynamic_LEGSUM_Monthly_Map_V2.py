@@ -280,7 +280,8 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
 
     # Merge LEGSUM with TLORDER + DRIVERPAY
     merged_df = legsum_df.merge(
-        tlorder_driverpay_df,
+        tlorder_driverpay_df[['BILL_NUMBER', 'CALLNAME', 'CHARGES', 'XCHARGES', 'DISTANCE', 'DISTANCE_UNITS', 
+                              'CURRENCY_CODE', 'TOTAL_PAY_SUM']],
         left_on='LS_FREIGHT',
         right_on='BILL_NUMBER',
         how='left'
