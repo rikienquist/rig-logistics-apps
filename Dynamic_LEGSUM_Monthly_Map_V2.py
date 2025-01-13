@@ -924,16 +924,6 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
         st.write("This table contains grand totals for all power units:")
         st.dataframe(all_grand_totals_display, use_container_width=True)
 
-        # Debugging Dropdown for Driver Pay discrepancies
-        st.write("### Debug Driver Pay Discrepancies")
-        power_unit_options = valid_rows['LS_POWER_UNIT'].unique()
-        selected_power_unit = st.selectbox("Select Power Unit to Debug:", options=power_unit_options)
-
-        if selected_power_unit:
-            debug_df = valid_rows[valid_rows['LS_POWER_UNIT'] == selected_power_unit]
-            st.write(f"Debugging Data for Power Unit: {selected_power_unit}")
-            st.dataframe(debug_df, use_container_width=True)
-
 else:
     st.warning("Please upload all CSV and XLSX files to proceed.")
     
