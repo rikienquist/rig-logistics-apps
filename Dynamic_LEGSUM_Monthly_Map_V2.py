@@ -847,16 +847,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             (merged_df['BILL_NUMBER'].notna())  # Ensure BILL_NUMBER exists
         ].copy()
 
-        # Ensure no duplicates in the valid rows (to avoid double counting)
-        valid_rows = valid_rows.drop_duplicates(subset=[
-            'LS_POWER_UNIT', 'BILL_NUMBER', 'TOTAL_CHARGE_CAD', 'Bill Distance (miles)', 'TOTAL_PAY_SUM'
-        ])
+        # Add a spot for debugging aggregated rows
+        power_unit_selected = st.selectbox("Select Power Unit to Debug:", options=valid_rows['LS_POWER_UNIT'].unique())
+        if power_unit_selected:
+            rows_to_debug = valid_rows[valid_rows['LS_POWER_UNIT'] == power_unit_selected]
+            st.write(f"Rows being aggregated for Power Unit {power_unit_selected}:")
+            st.dataframe(rows_to_debug)
 
-        # Group by LS_POWER_UNIT and BILL_NUMBER to aggregate unique values per BILL_NUMBER
+        # Group by LS_POWER_UNIT and aggregate relevant fields, summing only at the BILL_NUMBER level
         power_unit_aggregates = valid_rows.groupby(['LS_POWER_UNIT', 'BILL_NUMBER']).agg({
-            'TOTAL_CHARGE_CAD': 'sum',  # Sum Total Charges for all rows per BILL_NUMBER
-            'Bill Distance (miles)': 'sum',  # Sum distances for all rows per BILL_NUMBER
-            'TOTAL_PAY_SUM': 'sum'  # Sum driver pay for all rows per BILL_NUMBER
+            'TOTAL_CHARGE_CAD': 'first',  # Take the unique charge for each BILL_NUMBER
+            'Bill Distance (miles)': 'first',  # Take the unique distance for each BILL_NUMBER
+            'TOTAL_PAY_SUM': 'first'  # Take the unique driver pay for each BILL_NUMBER
         }).reset_index()
 
         # Summing aggregated values across each power unit
