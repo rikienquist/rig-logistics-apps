@@ -1,5 +1,4 @@
-### fixing total charge and driver pay since they're 2-5x
-
+### fixing when there is multiple of same bill (fixing charges)
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -22,17 +21,22 @@ FROM LEGSUM WHERE "LS_ACTUAL_DATE" BETWEEN 'X' AND 'Y';
 Use the following query to generate the required pre-merged TLORDER + DRIVERPAY data:  
 SELECT 
     D.BILL_NUMBER, O.CALLNAME, O.ORIGPROV, O.DESTPROV, O.CHARGES, O.XCHARGES, O.DISTANCE,
-    O.DISTANCE_UNITS, O.CURRENCY_CODE, SUM(D.TOTAL_PAY_AMT) AS TOTAL_PAY_SUM
+    O.DISTANCE_UNITS, O.CURRENCY_CODE, SUM(D.TOTAL_PAY_AMT) AS TOTAL_PAY_SUM, O.ROW_TIMESTAMP
+
 FROM 
     TLORDER O
+            
 RIGHT JOIN 
     DRIVERPAY D
+            
 ON 
     O.BILL_NUMBER = D.BILL_NUMBER
+            
 WHERE 
     O.PICK_UP_BY BETWEEN 'X' AND 'Y'
+            
 GROUP BY 
-    D.BILL_NUMBER, O.CALLNAME, O.CHARGES, O.XCHARGES, O.DISTANCE, O.DISTANCE_UNITS, O.CURRENCY_CODE;
+    D.BILL_NUMBER, O.CALLNAME, O.ORIGPROV, O.DESTPROV, O.CHARGES, O.XCHARGES, O.DISTANCE, O.DISTANCE_UNITS, O.CURRENCY_CODE, O.ROW_TIMESTAMP;
 
 Replace X and Y with the desired date range in form YYYY-MM-DD.
 
@@ -86,9 +90,22 @@ def preprocess_legsum(file, city_coords):
 @st.cache_data
 def preprocess_tlorder_driverpay(file):
     df = pd.read_csv(file, low_memory=False)
+    
+    # Convert necessary columns to numeric
     df['CHARGES'] = pd.to_numeric(df['CHARGES'], errors='coerce')
     df['XCHARGES'] = pd.to_numeric(df['XCHARGES'], errors='coerce')
     df['TOTAL_PAY_SUM'] = pd.to_numeric(df['TOTAL_PAY_SUM'], errors='coerce')
+    
+    # Convert ROW_TIMESTAMP to datetime for proper sorting
+    if 'ROW_TIMESTAMP' in df.columns:
+        df['ROW_TIMESTAMP'] = pd.to_datetime(df['ROW_TIMESTAMP'], errors='coerce')
+    
+        # Sort by BILL_NUMBER and ROW_TIMESTAMP (newest first)
+        df = df.sort_values(by=['BILL_NUMBER', 'ROW_TIMESTAMP'], ascending=[True, False])
+        
+        # Drop duplicates to retain only the latest row for each BILL_NUMBER
+        df = df.drop_duplicates(subset=['BILL_NUMBER'], keep='first')
+    
     return df
 
 @st.cache_data
