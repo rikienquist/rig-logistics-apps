@@ -915,10 +915,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             axis=1
         )
         all_grand_totals['Profit (CAD)'] = (
-            all_grand_totals['TOTAL_CHARGE_CAD']
-            - all_grand_totals['TOTAL_PAY_SUM']
-            - all_grand_totals['Lease Cost']
-            - all_grand_totals['Fuel Cost']
+            all_grand_totals['TOTAL_CHARGE_CAD'].fillna(0)
+            - all_grand_totals['TOTAL_PAY_SUM'].fillna(0)
+            - all_grand_totals['Lease Cost'].fillna(0)
+            - all_grand_totals['Fuel Cost'].fillna(0)  # Ensure NaN is replaced with 0
         )
 
         # Format the table for display
