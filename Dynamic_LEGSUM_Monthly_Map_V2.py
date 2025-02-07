@@ -583,17 +583,32 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             # Set lease cost for Owner Ops
             lease_cost = 3100  # Fixed lease cost in CAD
             
-            # Calculate Fuel Cost
+            # Calculate Fuel Cost Multiplier
             fuel_cost_multiplier = 1.45  # Multiplier for fuel cost calculation
-            merged_df['Fuel Cost'] = merged_df['FUEL_QUANTITY_L'] * fuel_cost_multiplier
             
-            # Calculate Fuel Cost for the selected power unit
-            grand_fuel_cost = (
-                filtered_view['FUEL_QUANTITY_L'].iloc[0] * fuel_cost_multiplier
-                if 'FUEL_QUANTITY_L' in filtered_view and not filtered_view.empty else 0
-            )
+            # Aggregate Fuel Cost from both Owner Ops and Company Trucks Reports
+            owner_ops_fuel = owner_ops_fuel_df.groupby('VEHICLE_NO', as_index=False).agg({'FUEL_QUANTITY_L': 'sum'})
+            company_trucks_fuel = company_trucks_fuel_df.groupby('VEHICLE_NO', as_index=False).agg({'FUEL_QUANTITY_L': 'sum'})
             
-            # Ensure Fuel Cost is not NaN
+            # Merge both fuel reports into one combined dataset
+            all_fuel_data = pd.concat([owner_ops_fuel, company_trucks_fuel], ignore_index=True)
+            
+            # Rename VEHICLE_NO to match LS_POWER_UNIT for merging
+            all_fuel_data.rename(columns={"VEHICLE_NO": "LS_POWER_UNIT"}, inplace=True)
+            
+            # Calculate Fuel Cost by multiplying with the fuel cost multiplier
+            all_fuel_data["Fuel Cost"] = all_fuel_data["FUEL_QUANTITY_L"] * fuel_cost_multiplier
+            
+            # Merge Fuel Cost into route_summary_df based on LS_POWER_UNIT
+            route_summary_df = route_summary_df.merge(all_fuel_data[['LS_POWER_UNIT', 'Fuel Cost']], on="LS_POWER_UNIT", how="left")
+            
+            # Ensure Fuel Cost is NaN only if the Power Unit is missing in both reports
+            route_summary_df["Fuel Cost"] = route_summary_df["Fuel Cost"].fillna(0)
+            
+            # Calculate Fuel Cost for the Grand Total row
+            grand_fuel_cost = route_summary_df["Fuel Cost"].sum()
+            
+            # Ensure grand_fuel_cost does not contain NaN
             grand_fuel_cost = 0 if pd.isna(grand_fuel_cost) else grand_fuel_cost
             
             # Add Lease Cost column to the route summary
