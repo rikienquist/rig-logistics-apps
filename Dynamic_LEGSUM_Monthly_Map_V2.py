@@ -40,8 +40,6 @@ GROUP BY
 
 Replace X and Y with the desired date range in form YYYY-MM-DD.
 
-Recommendation: add 2 weeks to Y for TLORDER + DRIVERPAY data to account for delayed driver pay.
-
 Save the query results as CSV files and upload them below to visualize the data.
 """)
 
