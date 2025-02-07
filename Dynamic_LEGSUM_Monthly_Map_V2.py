@@ -914,12 +914,23 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             if row['Bill Distance (miles)'] > 0 else 0,
             axis=1
         )
-        all_grand_totals['Profit (CAD)'] = (
-            all_grand_totals['TOTAL_CHARGE_CAD']
-            - all_grand_totals['TOTAL_PAY_SUM']
-            - all_grand_totals['Lease Cost']
-            - all_grand_totals['Fuel Cost']
+        # Ensure NaN values in Fuel Cost and Lease Cost are replaced with 0 before calculations
+        grand_totals['Fuel Cost'] = grand_totals['Fuel Cost'].fillna(0)
+        grand_totals['Lease Cost'] = grand_totals['Lease Cost'].fillna(0)
+        
+        # Calculate Profit (CAD) safely
+        grand_totals['Profit (CAD)'] = (
+            grand_totals["Total Charge (CAD)"]
+            - grand_totals["Driver Pay (CAD)"]
+            - grand_totals["Lease Cost"]
+            - grand_totals["Fuel Cost"]
         )
+        
+        # Format numeric values for display
+        for col in ['Total Charge (CAD)', 'Revenue per Mile', 'Driver Pay (CAD)', 'Lease Cost', 'Fuel Cost', 'Profit (CAD)']:
+            grand_totals[col] = grand_totals[col].apply(
+                lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else "$0.00"
+            )
 
         # Format the table for display
         all_grand_totals_display = all_grand_totals[[
