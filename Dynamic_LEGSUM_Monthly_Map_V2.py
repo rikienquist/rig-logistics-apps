@@ -592,8 +592,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             # Ensure grand_fuel_cost is never NaN
             grand_fuel_cost = 0 if np.isnan(grand_fuel_cost) else grand_fuel_cost
             
-            # Add Lease Cost column to the route summary
-            route_summary_df['Lease Cost'] = ""  # Initialize as blank for all rows
+            # Assign Lease Cost for each truck: Apply $3100 only to Owner Operators
+            route_summary_df['Lease Cost'] = route_summary_df['LS_POWER_UNIT'].apply(
+                lambda x: f"${lease_cost:,.2f}" if x in owner_ops_units else ""
+            )
             
             # Add the Grand Totals row
             if filtered_view['LS_POWER_UNIT'].iloc[0] in owner_ops_units:
