@@ -650,8 +650,17 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             # Append the Grand Total row
             route_summary_df = pd.concat([route_summary_df, grand_totals], ignore_index=True)
             
+            # Ensure Lease Cost and Fuel Cost are in the correct position
+            route_summary_df = route_summary_df[
+                [
+                    "Route", "From Zone", "To Zone", "BILL_NUMBER", "Customer", "Total Charge (CAD)",
+                    "Leg Distance (miles)", "Bill Distance (miles)", "Revenue per Mile", "Driver Pay (CAD)",
+                    "Lease Cost", "Fuel Cost", "Profit (CAD)", "LS_ACTUAL_DATE", "LS_LEG_NOTE", "Highlight", "LS_POWER_UNIT"
+                ]
+            ]
+            
             # Format numeric columns for display
-            for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)", "Fuel Cost"]:
+            for col in ["Total Charge (CAD)", "Revenue per Mile", "Driver Pay (CAD)", "Profit (CAD)", "Lease Cost", "Fuel Cost"]:
                 route_summary_df[col] = route_summary_df[col].apply(
                     lambda x: f"${x:,.2f}" if pd.notna(x) and isinstance(x, (float, int)) else x
                 )
