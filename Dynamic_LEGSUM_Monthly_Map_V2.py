@@ -914,11 +914,18 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
             if row['Bill Distance (miles)'] > 0 else 0,
             axis=1
         )
+        # Fill NaN values with 0 for calculations
+        all_grand_totals[['TOTAL_CHARGE_CAD', 'TOTAL_PAY_SUM', 'Lease Cost', 'Fuel Cost']] = (
+            all_grand_totals[['TOTAL_CHARGE_CAD', 'TOTAL_PAY_SUM', 'Lease Cost', 'Fuel Cost']]
+            .fillna(0)
+        )
+        
+        # Calculate Profit after replacing NaN values
         all_grand_totals['Profit (CAD)'] = (
-            all_grand_totals['TOTAL_CHARGE_CAD'].fillna(0)
-            - all_grand_totals['TOTAL_PAY_SUM'].fillna(0)
-            - all_grand_totals['Lease Cost'].fillna(0)
-            - all_grand_totals['Fuel Cost'].fillna(0)  # Ensure NaN is replaced with 0
+            all_grand_totals['TOTAL_CHARGE_CAD']
+            - all_grand_totals['TOTAL_PAY_SUM']
+            - all_grand_totals['Lease Cost']
+            - all_grand_totals['Fuel Cost']
         )
 
         # Format the table for display
