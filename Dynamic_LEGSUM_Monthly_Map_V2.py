@@ -572,6 +572,10 @@ if uploaded_legsum_file and uploaded_tlorder_driverpay_file and uploaded_isaac_o
                 "Bill Distance (miles)": "Bill Distance (miles)"
             })
             
+            # Ensure "Fuel Cost" column exists
+            if "Fuel Cost" not in route_summary_df.columns:
+                route_summary_df["Fuel Cost"] = 0  # Initialize Fuel Cost column if missing
+            
             # Identify if each power unit is an Owner Operator
             owner_ops_units = set(owner_ops_fuel_df['VEHICLE_NO'])  # Get unique power units in the Owner Ops report
             merged_df['Is Owner Operator'] = merged_df['LS_POWER_UNIT'].isin(owner_ops_units)  # True if in Owner Ops
