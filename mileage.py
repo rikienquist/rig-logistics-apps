@@ -27,7 +27,7 @@ else:
     st.stop()
 
 # Define relevant date columns explicitly
-date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31.1', 'NOV 1-30', 'DEC 1-31']
+date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31.1', 'NOV 1-30', 'DEC 1-31', 'Jan 1-31', 'FEB 1-28']
 
 # Validate date columns and ensure only the newest versions are selected
 available_date_columns = [col for col in date_columns if col in trailer_data.columns]
