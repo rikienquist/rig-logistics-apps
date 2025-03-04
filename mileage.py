@@ -15,7 +15,16 @@ if uploaded_file:
     # Handle duplicate columns by keeping the last occurrence (newest data)
     trailer_data = trailer_data.loc[:, ~trailer_data.columns.duplicated(keep='last')]
 
-    # Filter out rows where 'UNIT NUMBER' is NaN or missing, and remove rows where 'Terminal' is empty, or 'Wide' or 'Terminal' is 'Texas'
+    # Clean data for Terminal, Wide, and Type columns to remove case and space inconsistencies
+    for col in ['Terminal', 'Wide', 'Type']:
+        if col in trailer_data.columns:
+            trailer_data[col] = trailer_data[col].astype(str).str.strip()
+            if col in ['Terminal', 'Wide']:
+                trailer_data[col] = trailer_data[col].str.title()  # Convert to title case (e.g., "Edmonton")
+            if col == 'Type':
+                trailer_data[col] = trailer_data[col].str.upper()  # Convert to uppercase (e.g., "SINGLE")
+
+    # Remove rows where 'UNIT NUMBER' is NaN or missing, and filter out specific values
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
 
@@ -38,9 +47,9 @@ if not available_date_columns:
 
 # Function to calculate the Target %
 def calculate_target_percentage(row, date_column):
-    if row['Type'] == 'Single' and row[date_column] > 10:
+    if row['Type'] == 'SINGLE' and row[date_column] > 10:
         return (row[date_column] / 12000) * 100
-    elif row['Type'] == 'Team' and row[date_column] > 10:
+    elif row['Type'] == 'TEAM' and row[date_column] > 10:
         return (row[date_column] / 20000) * 100
     else:
         return None
@@ -55,9 +64,9 @@ def recalculate_metrics(data, date_column):
 
     # Recalculate Target Achieved status dynamically based on the selected date column
     def check_target_achieved(row):
-        if row['Type'] == 'Single' and row[date_column] >= 12000:
+        if row['Type'] == 'SINGLE' and row[date_column] >= 12000:
             return 'Target Achieved'
-        elif row['Type'] == 'Team' and row[date_column] >= 20000:
+        elif row['Type'] == 'TEAM' and row[date_column] >= 20000:
             return 'Target Achieved'
         else:
             return 'Target Not Achieved'
@@ -124,24 +133,6 @@ def create_stacked_bar_chart(data):
     )
     return fig
 
-# Define function to create a pie chart for Target Achieved Percentage
-def create_pie_chart(data):
-    target_achieved_count = data[data['Target Status'] == 'Target Achieved'].shape[0]
-    total_count = data.shape[0]
-    target_not_achieved_count = total_count - target_achieved_count
-
-    fig = go.Figure(
-        data=[go.Pie(
-            labels=['Target Achieved', 'Target Not Achieved'],
-            values=[target_achieved_count, target_not_achieved_count],
-            hole=0.4,
-            textinfo='label+percent',
-            marker=dict(colors=['green', 'red'])
-        )]
-    )
-    fig.update_layout(title_text="Target Achieved Percentage")
-    return fig
-
 # Display filtered data
 if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
@@ -151,39 +142,6 @@ if not filtered_data.empty:
     st.write("### Target Percentage Visualization")
     fig = create_stacked_bar_chart(filtered_data)
     st.plotly_chart(fig)
-
-    # Display pie chart for Target Achieved
-    st.write("### Target Achieved Percentage")
-    pie_fig = create_pie_chart(filtered_data)
-    st.plotly_chart(pie_fig)
-
-    # Drill down to routes and unit numbers
-    st.write("### Drill Down")
-    drilldown_level = st.radio("Drill Down to", ['Routes', 'Unit Numbers'])
-
-    if drilldown_level == 'Routes':
-        # Calculate average target %, average miles, and number of units for each route
-        route_data = filtered_data.groupby(['Route'])['Target %'].mean().reset_index(name="Average Target %")
-        route_miles_avg = filtered_data.groupby(['Route'])[selected_date_column].mean().reset_index(name="Average Miles")
-        route_unit_count = filtered_data.groupby(['Route'])['UNIT NUMBER'].nunique().reset_index(name="Number of Units")
-
-        # Merge all route-level calculations
-        merged_route_data = pd.merge(route_miles_avg, route_unit_count, on='Route')
-        merged_route_data = pd.merge(merged_route_data, route_data, on='Route')
-
-        # Display the reordered table with Average Target % at the end
-        st.write("Routes Breakdown", merged_route_data)
-
-    elif drilldown_level == 'Unit Numbers':
-        selected_route = st.selectbox("Select Route to Drill Down", filtered_data['Route'].unique())
-        
-        # Filter data for the selected route and rearrange columns
-        unit_data = filtered_data[filtered_data['Route'] == selected_route][['UNIT NUMBER', selected_date_column, 'Target %', 'Comments']]
-        unit_data.columns = ['Unit Number', 'Number of Miles', 'Target %', 'Comments']
-        
-        st.write("Unit Numbers Breakdown", unit_data)
-else:
-    st.warning("No data available for the selected filters.")
 
 # Add an option to download filtered data as CSV
 @st.cache_data
