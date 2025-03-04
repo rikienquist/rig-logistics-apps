@@ -16,7 +16,10 @@ if uploaded_file:
     # Handle duplicate columns (keep last occurrence for newest data)
     trailer_data = trailer_data.loc[:, ~trailer_data.columns.duplicated(keep='last')]
 
-    # Clean 'Terminal', 'Wide', and 'Type' columns to fix case and spacing inconsistencies
+    # Remove rows where 'UNIT NUMBER' or 'Terminal' is missing
+    trailer_data = trailer_data.dropna(subset=['UNIT NUMBER', 'Terminal'])
+
+    # Standardize 'Terminal', 'Wide', and 'Type' columns
     for col in ['Terminal', 'Wide', 'Type']:
         if col in trailer_data.columns:
             trailer_data[col] = trailer_data[col].astype(str).str.strip()
@@ -24,10 +27,9 @@ if uploaded_file:
                 trailer_data[col] = trailer_data[col].str.title()  # Convert to title case (e.g., "Edmonton")
             if col == 'Type':
                 trailer_data[col] = trailer_data[col].str.upper()  # Convert to uppercase (e.g., "SINGLE")
-
-    # Remove rows with missing 'UNIT NUMBER' and exclude invalid rows
-    trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
-    trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
+    
+    # Remove invalid rows where 'Type' is NaN
+    trailer_data = trailer_data[trailer_data['Type'].notna()]
 
     # Standardize 'Planner Name' column
     trailer_data['Planner Name'] = trailer_data['Planner Name'].fillna("").astype(str).str.strip().str.title()
