@@ -11,7 +11,7 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 
 # Load trailer data if a file is uploaded
 if uploaded_file:
-    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=2)
+    trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=1)
     # Handle duplicate columns by keeping the last occurrence (newest data)
     trailer_data = trailer_data.loc[:, ~trailer_data.columns.duplicated(keep='last')]
 
