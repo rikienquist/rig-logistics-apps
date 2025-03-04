@@ -12,10 +12,11 @@ uploaded_file = st.file_uploader("Upload Mileage Excel File", type=['xlsx'])
 # Load trailer data if a file is uploaded
 if uploaded_file:
     trailer_data = pd.read_excel(uploaded_file, sheet_name='Review Miles sheet', skiprows=1)
-    # Handle duplicate columns by keeping the last occurrence (newest data)
+    
+    # Handle duplicate columns (keep last occurrence for newest data)
     trailer_data = trailer_data.loc[:, ~trailer_data.columns.duplicated(keep='last')]
 
-    # Clean data for Terminal, Wide, and Type columns to remove case and space inconsistencies
+    # Clean 'Terminal', 'Wide', and 'Type' columns to fix case and spacing inconsistencies
     for col in ['Terminal', 'Wide', 'Type']:
         if col in trailer_data.columns:
             trailer_data[col] = trailer_data[col].astype(str).str.strip()
@@ -24,11 +25,11 @@ if uploaded_file:
             if col == 'Type':
                 trailer_data[col] = trailer_data[col].str.upper()  # Convert to uppercase (e.g., "SINGLE")
 
-    # Remove rows where 'UNIT NUMBER' is NaN or missing, and filter out specific values
+    # Remove rows with missing 'UNIT NUMBER' and exclude invalid rows
     trailer_data = trailer_data[trailer_data['UNIT NUMBER'].notna()]
     trailer_data = trailer_data[(trailer_data['Terminal'].notna()) & (trailer_data['Wide'] != 'Texas') & (trailer_data['Terminal'] != 'Texas')]
 
-    # Ensure 'Planner Name' is treated as a string and handle NaN values
+    # Standardize 'Planner Name' column
     trailer_data['Planner Name'] = trailer_data['Planner Name'].fillna("").astype(str).str.strip().str.title()
 
 else:
@@ -36,14 +37,21 @@ else:
     st.stop()
 
 # Define relevant date columns explicitly
-date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31.1', 'NOV 1-30', 'DEC 1-31', 'Jan 1-31', 'FEB 1-28']
+date_columns = ['AUG 1-31', 'Sept 1-30.', 'OCT 1-31', 'NOV 1-30', 'DEC 1-31', 'Jan 1-31', 'FEB 1-28']
 
-# Validate date columns and ensure only the newest versions are selected
-available_date_columns = [col for col in date_columns if col in trailer_data.columns]
+# Identify and select the most recent (rightmost) columns when duplicates exist
+available_date_columns = []
+for col in date_columns:
+    matching_cols = [c for c in trailer_data.columns if col in c]
+    if matching_cols:
+        available_date_columns.append(matching_cols[-1])  # Select the latest version
 
 if not available_date_columns:
     st.error("No valid date columns found in the uploaded file.")
     st.stop()
+
+# Select Date Column dynamically
+selected_date_column = st.selectbox("Select Date Column", available_date_columns)
 
 # Function to calculate the Target %
 def calculate_target_percentage(row, date_column):
@@ -53,9 +61,6 @@ def calculate_target_percentage(row, date_column):
         return (row[date_column] / 20000) * 100
     else:
         return None
-
-# Select Date Column dynamically
-selected_date_column = st.selectbox("Select Date Column", available_date_columns)
 
 # Dynamically reset and recalculate Target % and Target Achieved based on the selected column
 def recalculate_metrics(data, date_column):
@@ -80,9 +85,6 @@ filtered_data = recalculate_metrics(trailer_data.copy(), selected_date_column)
 # Remove duplicates in terminals (especially for 'Winnipeg')
 filtered_data['Terminal'] = filtered_data['Terminal'].replace({'Winnipeg ': 'Winnipeg'})  # Fix spacing issues
 
-# Normalize Planner Name to handle case and space differences
-filtered_data['Planner Name'] = filtered_data['Planner Name'].str.strip().str.title()  # Standardize to title case
-
 # Create filters with "All" option and multiple selection enabled
 terminals = ['All'] + sorted(filtered_data['Terminal'].unique())
 terminal = st.multiselect("Select Terminal", terminals, default='All')
@@ -93,7 +95,7 @@ type_filter = st.multiselect("Select Type", types, default='All')
 wides = ['All'] + sorted(filtered_data['Wide'].unique())
 wide = st.multiselect("Select Wide (Geographic Region)", wides, default='All')
 
-planner_names = ['All'] + sorted(filtered_data['Planner Name'].unique())
+planner_names = ['All'] + sorted(set(filtered_data['Planner Name']))  # Fix duplicate names
 planner_name = st.multiselect("Select Planner Name", planner_names, default='All')
 
 # Filter data based on selections
@@ -106,11 +108,7 @@ if 'All' not in wide:
 if 'All' not in planner_name:
     filtered_data = filtered_data[filtered_data['Planner Name'].isin(planner_name)]
 
-# Calculate average Target % and count units
-avg_target_percentage = filtered_data['Target %'].mean()
-unit_count = filtered_data['UNIT NUMBER'].nunique()
-
-# Define function to create a stacked bar chart when both Single and Team are selected
+# Define function to create a stacked bar chart
 def create_stacked_bar_chart(data):
     avg_target_per_terminal_type = data.groupby(['Terminal', 'Type'])['Target %'].mean().reset_index()
     unit_count_per_terminal_type = data.groupby(['Terminal', 'Type'])['UNIT NUMBER'].nunique().reset_index()
@@ -133,15 +131,41 @@ def create_stacked_bar_chart(data):
     )
     return fig
 
+# Define function to create a pie chart for Target Achieved Percentage
+def create_pie_chart(data):
+    target_achieved_count = data[data['Target Status'] == 'Target Achieved'].shape[0]
+    total_count = data.shape[0]
+    target_not_achieved_count = total_count - target_achieved_count
+
+    fig = go.Figure(
+        data=[go.Pie(
+            labels=['Target Achieved', 'Target Not Achieved'],
+            values=[target_achieved_count, target_not_achieved_count],
+            hole=0.4,
+            textinfo='label+percent',
+            marker=dict(colors=['green', 'red'])
+        )]
+    )
+    fig.update_layout(title_text="Target Achieved Percentage")
+    return fig
+
 # Display filtered data
 if not filtered_data.empty:
     st.write("### Filtered Trailer Data")
     st.write(filtered_data)
 
-    # Display target percentage visualization (stacked if both types are selected)
+    # Display target percentage visualization
     st.write("### Target Percentage Visualization")
     fig = create_stacked_bar_chart(filtered_data)
     st.plotly_chart(fig)
+
+    # Display pie chart for Target Achieved
+    st.write("### Target Achieved Percentage")
+    pie_fig = create_pie_chart(filtered_data)
+    st.plotly_chart(pie_fig)
+
+else:
+    st.warning("No data available for the selected filters.")
 
 # Add an option to download filtered data as CSV
 @st.cache_data
