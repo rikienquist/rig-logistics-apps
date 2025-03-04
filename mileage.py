@@ -19,6 +19,9 @@ if uploaded_file:
     # Remove rows where 'UNIT NUMBER' or 'Terminal' is missing
     trailer_data = trailer_data.dropna(subset=['UNIT NUMBER', 'Terminal'])
 
+    # Exclude rows where Terminal is 'Texas'
+    trailer_data = trailer_data[trailer_data['Terminal'].str.strip().str.title() != 'Texas']
+
     # Standardize 'Terminal', 'Wide', and 'Type' columns
     for col in ['Terminal', 'Wide', 'Type']:
         if col in trailer_data.columns:
@@ -27,7 +30,7 @@ if uploaded_file:
                 trailer_data[col] = trailer_data[col].str.title()  # Convert to title case (e.g., "Edmonton")
             if col == 'Type':
                 trailer_data[col] = trailer_data[col].str.upper()  # Convert to uppercase (e.g., "SINGLE")
-    
+
     # Remove invalid rows where 'Type' is NaN
     trailer_data = trailer_data[trailer_data['Type'].notna()]
 
