@@ -9,13 +9,13 @@ coordinates_data = pd.read_excel('trailer_count_data/Coordinates.xlsx', sheet_na
 st.title("Trailer Movement Map")
 
 # File uploader for trailer data
-uploaded_trailer_file = st.file_uploader("Upload Trailer Count File", type=['xlsx'])
+uploaded_trailer_file = st.file_uploader("Upload Trailer Count File", type=['csv'])
 
 # Load trailer data if a file is uploaded, otherwise show a message
 if uploaded_trailer_file:
-    trailer_data = pd.read_excel(uploaded_trailer_file, sheet_name='attachment')
+    trailer_data = pd.read_csv(uploaded_trailer_file)
 else:
-    st.warning("Please upload a Trailer Count Excel file to visualize the data. Make sure the sheet name is called 'attachment'.")
+    st.warning("Please upload a Trailer Count CSV file to visualize the data.")
     st.stop()  # Stop the script until a file is uploaded
 
 # Filter the trailers based on the selected classes
